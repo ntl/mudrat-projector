@@ -1,0 +1,41 @@
+
+
+
+
+
+
+
+
+
+      Scenario
+
+        Income
+          Self employed
+          Salaried
+        Expenses
+          Recurring
+          One time
+        Liabilities
+          Mortgage, student loan debt, etc.
+        Investments
+          Property
+          Stock
+          Mutual funds, etc.
+
+
+
+      Bank/Financial transaction history
+
+        Can reconcile against active scenario
+
+
+
+      Projection
+
+        Creates ledgers using bank transaction history when available, active scenario on fallback
+        Changes to active scenario immediately propogate to projection
+        Calculates taxes and adjusts for inflation
+        When scenario changes, we store 1 year, 2 year, 5 year, etc.
+
+
+
