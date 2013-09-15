@@ -1,5 +1,5 @@
-load File.expand_path('../date_diff.rb', __FILE__)
-load File.expand_path('../tax_calculator.rb', __FILE__)
+require_relative 'date_diff'
+require_relative 'tax_calculator'
 
 class Projector
   attr_accessor :accounts, :transactions, :tax_info
