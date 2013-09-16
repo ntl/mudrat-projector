@@ -2,11 +2,149 @@ require_relative 'date_diff'
 require_relative 'tax_calculator'
 
 class Projector
-  attr_accessor :accounts, :transactions, :tax_info
+  ABSOLUTE_START = Date.new 1970, 1, 1
+  ACCOUNT_TYPES = %i(asset expense liability revenue)
+
+  AccountExists = Class.new ArgumentError
+  BalanceError = Class.new ArgumentError
+  InvalidAccount = Class.new ArgumentError
+
+  attr :accounts, :range, :transactions
 
   def initialize
+    @accounts = {} 
     @transactions = []
   end
+
+  def accounts= accounts_hash
+    accounts.clear
+    accounts_hash.each { |id, hash| add_account id, hash }
+  end
+
+  def add_account id, hash
+    account = build_account_from_hash id, hash
+    validate_account! id, account
+    accounts[id] = account
+  end
+
+  def add_transaction hash
+    transaction = build_transaction_from_hash hash
+    validate_transaction! transaction
+    transactions.push transaction
+  end
+
+  def project from: ABSOLUTE_START, to: nil
+    @range = (from..to)
+    accounts.each { |_, account| account.balance = account.opening_balance }
+    OpenStruct.new(
+      opening_equity: opening_equity,
+      closing_equity: closing_equity,
+    )
+  end
+
+  private
+
+  def apply_credit amount, to: nil
+    apply_transaction_bit :-, amount, to
+  end
+
+  def apply_debit amount, to: nil
+    apply_transaction_bit :+, amount, to
+  end
+
+  def apply_transaction_bit income_expense_method, amount, account
+    if %i(asset expense).include? account.type
+      account.balance = account.balance.send income_expense_method, amount
+    else
+      account.balance = account.balance.send income_expense_method, -amount
+    end
+  end
+
+  def asset_balances
+    asset_accounts = accounts.values.select { |account| account.type == :asset }
+    asset_accounts.map(&:balance).inject(0) { |sum, balance| sum + balance.to_i }
+  end
+
+  def build_account_from_hash id, hash
+    hash[:name] = default_account_name(id) unless hash.has_key? :name
+    default = {
+      open_date: ABSOLUTE_START,
+      opening_balance: 0,
+    }
+    default.merge! hash
+    OpenStruct.new default
+  end
+
+  def build_transaction_from_hash hash
+    default = {
+      date: ABSOLUTE_START,
+    }
+    default.merge! hash
+    if credit = default.delete(:credit)
+      default[:credits] = [credit]
+    end
+    if debit = default.delete(:debit)
+      default[:debits] = [debit]
+    end
+    OpenStruct.new default
+  end
+
+  def closing_equity
+    transactions.each do |transaction|
+      transaction.credits.each do |amount, account_id|
+        apply_credit amount, to: accounts.fetch(account_id)
+      end
+      transaction.debits.each do |amount, account_id|
+        apply_debit amount, to: accounts.fetch(account_id)
+      end
+    end
+    asset_balances
+  end
+
+  def default_account_name id
+    id.to_s.capitalize.gsub(/_[a-z]/) do |dash_letter|
+      dash_letter[1].upcase
+    end
+  end
+
+  def opening_equity
+    accounts.inject 0 do |sum, (id, account)|
+      if account.open_date <= range.begin
+        sum + account.opening_balance
+      else
+        sum
+      end
+    end
+  end
+
+  def total_credits_and_debits_for transaction
+    credits = transaction.credits.map &:first
+    debits  = transaction.debits.map &:first
+    sum_of = ->(integers) { integers.inject(0) { |s,i| s + i } }
+    [sum_of.call(credits), sum_of.call(debits)]
+  end
+
+  def validate_account! id, account
+    existing_account = accounts[id]
+    if existing_account
+      raise AccountExists, "Account `#{id}' exists; name is `#{existing_account.name}'"
+    end
+    unless ACCOUNT_TYPES.include? account.type
+      raise InvalidAccount, "Account `#{id}', named `#{account.name}', does not have a type in #{ACCOUNT_TYPES.join(', ')}"
+    end
+  end
+
+  def validate_transaction! transaction
+    credits, debits = total_credits_and_debits_for transaction
+    unless credits == debits
+      raise BalanceError, "Debits and credits do not balance"
+    end
+  end
+end
+
+__END__
+
+  public
 
   def project! from: nil, to: nil
     initial = get_initial
