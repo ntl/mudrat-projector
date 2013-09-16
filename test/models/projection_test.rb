@@ -52,12 +52,6 @@ class ProjectorAccountsTest < ProjectionTest
     assert_equal Date.new(1970, 1, 1), @projector.accounts[:checking].open_date
   end
 
-  def test_add_accounts_passes_account_hashes_to_add_account
-    assert_equal 0, @projector.accounts.size
-    @projector.accounts = { checking: { type: :asset } }
-    assert_equal 1, @projector.accounts.size
-  end
-
   def test_opening_balances_in_accounts_affects_opening_equity
     assert_equal 0, projection.opening_equity
     @projector.add_account :checking, type: :asset, opening_balance: 50
@@ -67,6 +61,12 @@ class ProjectorAccountsTest < ProjectionTest
     assert_equal 50, projection.opening_equity
 
     assert_equal 140, projection.closing_equity
+  end
+
+  def test_add_accounts_passes_account_hashes_to_add_account
+    assert_equal 0, @projector.accounts.size
+    @projector.accounts = { checking: { type: :asset } }
+    assert_equal 1, @projector.accounts.size
   end
 end
 
@@ -89,6 +89,36 @@ class ProjectorSingleTransactionTest < ProjectionTest
     assert_equal 1000, projection.closing_equity
   end
 
+  def test_single_transaction_with_split
+    @projector.add_account :savings, type: :asset
+    @projector.add_transaction(
+      date: jan_1_2000,
+      credit: [1000, :nustartup_inc],
+      debits: [ [500, :checking], [500, :savings]],
+    )
+
+    assert_equal 1000, projection.closing_equity
+  end
+
+  def test_recurring_transaction_surrounding_the_projection_range
+    @projector.add_transaction(
+      credit: [4000, :nustartup_inc],
+      debit:  [4000, :checking],
+      recurring_schedule: [1, :month],
+    )
+    assert_equal 48000, projection.closing_equity
+  end
+
+  def test_recurring_transaction_within_the_projection_range
+    @projector.add_transaction(
+      credit: [4000, :nustartup_inc],
+      debit:  [4000, :checking],
+      date: feb_1_2000,
+      recurring_schedule: [1, :month, may_31_2000],
+    )
+    assert_equal 16000, projection.closing_equity
+  end
+
   def test_single_transaction_which_does_not_balance
     assert_raises Projector::BalanceError do
       @projector.add_transaction(
@@ -108,6 +138,43 @@ class ProjectorSingleTransactionTest < ProjectionTest
       ],
     )
   end
+
+  def test_a_year_salary_of_taxable_income
+    @projector.add_transaction(
+      credit: [4000, :nustartup_inc],
+      debit:  [4000, :checking],
+      tags: %i(w2),
+      recurring_schedule: [1, :month],
+    )
+    expected_taxes = expected_2000_taxes 48000
+    assert_equal (48000 - expected_taxes), projection.closing_equity
+  end
+
+  def test_add_transactions_passes_transactions_hashes_to_add_transaction
+    assert_equal 0, @projector.transactions.size
+    @projector.transactions = [{
+      date: jan_1_2000,
+      credit: [1000, :nustartup_inc],
+      debit:  [1000, :checking],
+    }]
+    assert_equal 1, @projector.transactions.size
+  end
+
+private
+
+  def expected_2000_taxes income
+    agi    = income
+    agi   -= 2800 * 1            # Exemption
+    agi   -= 4400                # Standard deduction
+
+    [
+      26250 * 0.15,              # FICA Bracket 1
+      (agi - 26250) * 0.28,      # FICA Bracket 2
+      (income * (1.45 / 100.0)), # Medicare
+      (income * (6.20 / 100.0)), # SS
+    ].inject { |s,v| s + v }
+  end
+
 end
 
 __END__

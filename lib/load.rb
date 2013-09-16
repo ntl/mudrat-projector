@@ -3,6 +3,7 @@ require_relative 'tax_calculator'
 
 class Projector
   ABSOLUTE_START = Date.new 1970, 1, 1
+  ABSOLUTE_END   = Date.new 9999, 1, 1
   ACCOUNT_TYPES = %i(asset expense liability revenue)
 
   AccountExists = Class.new ArgumentError
@@ -33,12 +34,18 @@ class Projector
     transactions.push transaction
   end
 
+  def transactions= transactions
+    transactions.each do |transaction_hash|
+      add_transaction transaction_hash
+    end
+  end
+
   def project from: ABSOLUTE_START, to: nil
     @range = (from..to)
     accounts.each { |_, account| account.balance = account.opening_balance }
     OpenStruct.new(
       opening_equity: opening_equity,
-      closing_equity: closing_equity,
+      closing_equity: run_projection,
     )
   end
 
@@ -78,6 +85,7 @@ class Projector
   def build_transaction_from_hash hash
     default = {
       date: ABSOLUTE_START,
+      tags: [],
     }
     default.merge! hash
     if credit = default.delete(:credit)
@@ -86,16 +94,28 @@ class Projector
     if debit = default.delete(:debit)
       default[:debits] = [debit]
     end
+    recurring_schedule = default[:recurring_schedule]
+    if recurring_schedule
+      default[:recurring_schedule] = OpenStruct.new(
+        number: recurring_schedule.fetch(0),
+        unit:   recurring_schedule.fetch(1),
+        end:    recurring_schedule.fetch(2, ABSOLUTE_END),
+      )
+    end
     OpenStruct.new default
   end
 
-  def closing_equity
+  def run_projection
     transactions.each do |transaction|
       transaction.credits.each do |amount, account_id|
-        apply_credit amount, to: accounts.fetch(account_id)
+        account = accounts.fetch account_id
+        total_amount = get_total_amount amount, transaction, account
+        apply_credit total_amount, to: account
       end
       transaction.debits.each do |amount, account_id|
-        apply_debit amount, to: accounts.fetch(account_id)
+        account = accounts.fetch account_id
+        total_amount = get_total_amount amount, transaction, account
+        apply_debit total_amount, to: account
       end
     end
     asset_balances
@@ -104,6 +124,25 @@ class Projector
   def default_account_name id
     id.to_s.capitalize.gsub(/_[a-z]/) do |dash_letter|
       dash_letter[1].upcase
+    end
+  end
+
+  def get_total_amount amount, transaction, account
+    recurring_schedule = transaction.recurring_schedule
+    if recurring_schedule
+      txn_start = [range.begin, transaction.date].max
+      txn_end   = [range.end, recurring_schedule.end].min
+      [
+        amount,
+        DateDiff.date_diff(
+          unit: recurring_schedule.unit,
+          from: txn_start,
+          to:   txn_end,
+        ),
+        (1.0 / recurring_schedule.number),
+      ].inject { |a,v| a * v }
+    else
+      amount
     end
   end
 
