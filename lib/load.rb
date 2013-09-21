@@ -49,21 +49,38 @@ class Projector
     )
   end
 
+  def split_account parent_account_id, splits = {}
+    parent_account = accounts.fetch parent_account_id
+    unless splits.values.reduce(&:+) == parent_account.opening_balance
+      split_account_balance_error parent_account, splits
+    end
+    splits.map do |id, opening_balance|
+      add_account id, build_child_account_hash(opening_balance, parent_account)
+    end
+  end
+
   private
 
   def apply_credit amount, to: nil
-    apply_transaction_bit :-, amount, to
+    if %i(asset expense).include? to.type
+      apply_transaction_bit :-, amount, to
+    else
+      apply_transaction_bit :+, amount, to
+    end
   end
 
   def apply_debit amount, to: nil
-    apply_transaction_bit :+, amount, to
+    if %i(asset expense).include? to.type
+      apply_transaction_bit :+, amount, to
+    else
+      apply_transaction_bit :-, amount, to
+    end
   end
 
-  def apply_transaction_bit income_expense_method, amount, account
-    if %i(asset expense).include? account.type
-      account.balance = account.balance.send income_expense_method, amount
-    else
-      account.balance = account.balance.send income_expense_method, -amount
+  def apply_transaction_bit method, amount, account
+    while account
+      account.balance = account.balance.send method, amount
+      account = account.parent
     end
   end
 
@@ -73,13 +90,21 @@ class Projector
   end
 
   def build_account_from_hash id, hash
-    hash[:name] = default_account_name(id) unless hash.has_key? :name
-    default = {
+    hash = {
+      name: default_account_name(id),
       open_date: ABSOLUTE_START,
       opening_balance: 0,
+    }.merge hash
+    OpenStruct.new hash
+  end
+
+  def build_child_account_hash opening_balance, parent
+    {
+      opening_balance: opening_balance,
+      open_date: parent.open_date,
+      parent: parent,
+      type: parent.type,
     }
-    default.merge! hash
-    OpenStruct.new default
   end
 
   def build_transaction_from_hash hash
@@ -154,6 +179,15 @@ class Projector
         sum
       end
     end
+  end
+
+  def split_account_balance_error parent_account, splits
+    fmt_accounts = splits.each_with_object [] do |(id, opening_balance), ary|
+      ary.push "#{id.inspect} (#{opening_balance})"
+    end.join ', '
+    raise BalanceError, "Accounts #{fmt_accounts} do not add up to account "\
+      "#{parent_account.name.inspect} opening balance of "\
+      "#{parent_account.opening_balance}"
   end
 
   def total_credits_and_debits_for transaction
