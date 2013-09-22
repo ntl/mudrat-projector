@@ -87,7 +87,7 @@ class Projector
 
   def project to: nil
     freeze
-    Projection.new self, from: from, to: to
+    Projection.new(self, from: from, to: to).tap &:project
   end
 
   def split_account parent_id, into: []

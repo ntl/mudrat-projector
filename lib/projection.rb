@@ -65,7 +65,6 @@ class Projection
     @to                  = to
     @account_projections = build_account_projections
     @transactions        = []
-    project
   end
 
   def accounts
@@ -95,6 +94,16 @@ class Projection
     asset_balances :initial_balance # - liability_balances, etc.
   end
 
+  def project
+    projector.transactions.each do |transaction|
+      new_transaction = transaction.apply! self do |credit_or_debit, amount, account_id|
+        account_projection = account_projections.fetch account_id
+        apply_transaction_bit credit_or_debit, amount, account_projection
+      end
+      transactions.push new_transaction if new_transaction
+    end
+  end
+
   def range
     (from..to)
   end
@@ -113,16 +122,6 @@ class Projection
   def build_account_projections
     projector.accounts.each_with_object Hash.new do |(id, account), hash|
       hash[id] = AccountProjection.new(range, account)
-    end
-  end
-
-  def project
-    projector.transactions.each do |transaction|
-      new_transaction = transaction.apply! self do |credit_or_debit, amount, account_id|
-        account_projection = account_projections.fetch account_id
-        apply_transaction_bit credit_or_debit, amount, account_projection
-      end
-      transactions.push new_transaction if new_transaction
     end
   end
 end
