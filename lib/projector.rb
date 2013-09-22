@@ -16,32 +16,16 @@ class Projector
   end
 
   class Transaction
-    attr :credits, :date, :debits, :recurring_schedule, :tags
+    attr :credits, :date, :debits, :recurring_schedule
 
-    def initialize projector, hash
-      default = {
-        date: projector.from,
-        tags: [],
-      }
-      default.merge! hash
-      if credit = default.delete(:credit)
-        default[:credits] = [credit]
-      end
-      if debit = default.delete(:debit)
-        default[:debits] = [debit]
-      end
-      if recurring_schedule = default[:recurring_schedule]
-        default[:recurring_schedule] = OpenStruct.new(
-          number: recurring_schedule.fetch(0),
-          unit:   recurring_schedule.fetch(1),
-          from:   hash.fetch(:date),
-          to:     recurring_schedule.fetch(2, ABSOLUTE_END),
-        ).tap do |sched|
-          sched.range = (sched.from..sched.to)
-        end
-      end
-      default.each do |k,v|
-        instance_variable_set "@#{k}", v
+    def initialize projector, params = {}
+      @date = params.fetch(:date) || projector.from
+      @credits = Array params[:credits]
+      @debits  = Array params[:debits]
+      @credits << params[:credit] if params[:credit]
+      @debits  << params[:debit]  if params[:debit]
+      if params[:recurring_schedule]
+        @recurring_schedule = build_recurring_schedule *params[:recurring_schedule]
       end
       freeze
     end
@@ -64,9 +48,20 @@ class Projector
 
     private
 
+    def build_recurring_schedule number, unit, to = Projector::ABSOLUTE_END
+      OpenStruct.new(
+        number: number,
+        unit:   unit,
+        from:   date,
+        to:     to,
+      ).tap do |sched|
+        sched.range = (sched.from..sched.to)
+      end
+    end
+
     def total_credits_and_debits
       credit_amounts = credits.map &:first
-      debit_amounts  = debits.map &:first
+      debit_amounts  = debits.map  &:first
       sum_of = ->(integers) { integers.inject(0) { |s,i| s + i } }
       [sum_of.call(credit_amounts), sum_of.call(debit_amounts)]
     end
