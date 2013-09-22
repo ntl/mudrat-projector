@@ -24,8 +24,8 @@ class Projector
       end
     end
 
-    def initialize projector, params = {}
-      @date = params.fetch(:date) || projector.from
+    def initialize params = {}
+      @date = params.fetch :date, Projector::ABSOLUTE_START
       @credits = Array params[:credits]
       @debits  = Array params[:debits]
       @credits << params[:credit] if params[:credit]
@@ -100,7 +100,7 @@ class Projector
     if transaction_or_hash.is_a? Transaction
       transaction = transaction_or_hash
     else
-      transaction = build_transaction_from_hash transaction_or_hash
+      transaction = Transaction.new transaction_or_hash
     end
     transaction.validate!
     transactions.push transaction
@@ -166,10 +166,6 @@ class Projector
       parent_id: parent_id,
       type: parent.type,
     }
-  end
-
-  def build_transaction_from_hash hash
-    Transaction.new self, hash
   end
 
   def default_account_name id
