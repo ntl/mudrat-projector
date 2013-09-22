@@ -52,43 +52,18 @@ class ProjectorAccountsTest < ProjectionTest
     assert_equal Date.new(1970, 1, 1), @projector.accounts[:checking].open_date
   end
 
-  def test_opening_balances_in_accounts_affects_opening_equity
-    assert_equal 0, projection.opening_equity
-    @projector.add_account :checking, type: :asset, opening_balance: 50
-    assert_equal 50, projection.opening_equity
-    @projector.add_account :savings, type: :asset, opening_balance: 90,
-      open_date: Date.new(2000, 1, 2)
-    assert_equal 50, projection.opening_equity
-
-    assert_equal 140, projection.closing_equity
-  end
-
   def test_adding_a_sub_account
     parent = @projector.add_account(
       :checking,
       open_date: jan_1_1999,
-      opening_balance: 1234,
       type: :asset,
     )
 
-    child, _ = @projector.split_account(
-      :checking,
-      checking_sub_1: 500,
-      checking_sub_2: 734,
-    )
+    child, _ = @projector.split_account :checking, into: %i(checking_sub_1 checking_sub_2)
 
-    assert_equal parent,     child.parent
+    assert_equal :checking,  child.parent_id
     assert_equal jan_1_1999, child.open_date
-    assert_equal 500,        child.opening_balance
     assert_equal :asset,     child.type
-
-    assert_raises Projector::BalanceError do
-      @projector.split_account(
-        :checking_sub_1,
-        checking_sub_1_sub1: 499,
-        checking_sub_1_sub2: 0,
-      )
-    end
   end
 
   def test_add_accounts_passes_account_hashes_to_add_account
@@ -115,14 +90,12 @@ class ProjectorSingleTransactionTest < ProjectionTest
     )
 
     assert_equal 1000, projection.closing_equity
+    assert_equal [0, 1000], projection.accounts[:checking].delta
+    assert_equal [0, 1000], projection.accounts[:nustartup_inc].delta
   end
 
   def test_single_transaction_to_sub_account_without_split
-    @projector.split_account(
-      :checking,
-      checking_sub_1: 0,
-      checking_sub_2: 0,
-    )
+    @projector.split_account :checking, into: %i(checking_sub_1 checking_sub_2)
 
     @projector.add_transaction(
       date: jan_1_2000,
@@ -130,11 +103,9 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debit:  [1000, :checking_sub_1],
     )
 
-    projection
-
-    assert_equal 1000, @projector.accounts.fetch(:checking_sub_1).balance
-    assert_equal 0,    @projector.accounts.fetch(:checking_sub_2).balance
-    assert_equal 1000, @projector.accounts.fetch(:checking).balance
+    assert_equal [0, 1000], projection.accounts.fetch(:checking).delta
+    assert_equal [0, 1000], projection.accounts.fetch(:checking_sub_1).delta
+    assert_equal [0, 0],    projection.accounts.fetch(:checking_sub_2).delta
   end
 
   def test_single_transaction_with_split
