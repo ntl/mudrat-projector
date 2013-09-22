@@ -15,6 +15,62 @@ class Projector
     @transactions = []
   end
 
+  class Transaction
+    attr :credits, :date, :debits, :recurring_schedule, :tags
+
+    def initialize projector, hash
+      default = {
+        date: projector.from,
+        tags: [],
+      }
+      default.merge! hash
+      if credit = default.delete(:credit)
+        default[:credits] = [credit]
+      end
+      if debit = default.delete(:debit)
+        default[:debits] = [debit]
+      end
+      if recurring_schedule = default[:recurring_schedule]
+        default[:recurring_schedule] = OpenStruct.new(
+          number: recurring_schedule.fetch(0),
+          unit:   recurring_schedule.fetch(1),
+          from:   hash.fetch(:date),
+          to:     recurring_schedule.fetch(2, ABSOLUTE_END),
+        ).tap do |sched|
+          sched.range = (sched.from..sched.to)
+        end
+      end
+      default.each do |k,v|
+        instance_variable_set "@#{k}", v
+      end
+    end
+
+    def each_bit
+      credits.each do |amount, account_id|
+        yield :credit, amount, account_id
+      end
+      debits.each do |amount, account_id|
+        yield :debit, amount, account_id
+      end
+    end
+
+    def validate!
+      total_credits, total_debits = total_credits_and_debits
+      unless total_credits == total_debits
+        raise BalanceError, "Debits and credits do not balance"
+      end
+    end
+
+    private
+
+    def total_credits_and_debits
+      credit_amounts = credits.map &:first
+      debit_amounts  = debits.map &:first
+      sum_of = ->(integers) { integers.inject(0) { |s,i| s + i } }
+      [sum_of.call(credit_amounts), sum_of.call(debit_amounts)]
+    end
+  end
+
   class << self
     def new(existing_projection = nil, **params)
       if existing_projection
@@ -47,7 +103,7 @@ class Projector
 
   def add_transaction hash
     transaction = build_transaction_from_hash hash
-    validate_transaction! transaction
+    transaction.validate!
     transactions.push transaction
   end
 
@@ -114,50 +170,13 @@ class Projector
   end
 
   def build_transaction_from_hash hash
-    default = {
-      date: from,
-      tags: [],
-    }
-    default.merge! hash
-    if credit = default.delete(:credit)
-      default[:credits] = [credit]
-    end
-    if debit = default.delete(:debit)
-      default[:debits] = [debit]
-    end
-    if recurring_schedule = default[:recurring_schedule]
-      default[:recurring_schedule] = OpenStruct.new(
-        number: recurring_schedule.fetch(0),
-        unit:   recurring_schedule.fetch(1),
-        from:   hash.fetch(:date),
-        to:     recurring_schedule.fetch(2, ABSOLUTE_END),
-      ).tap do |sched|
-        sched.range = (sched.from..sched.to)
-      end
-    end
-    OpenStruct.new(default).tap do |t|
-      def t.each_bit
-        credits.each do |amount, account_id|
-          yield :credit, amount, account_id
-        end
-        debits.each do |amount, account_id|
-          yield :debit, amount, account_id
-        end
-      end
-    end
+    Transaction.new self, hash
   end
 
   def default_account_name id
     id.to_s.capitalize.gsub(/_[a-z]/) do |dash_letter|
       dash_letter[1].upcase
     end
-  end
-
-  def total_credits_and_debits_for transaction
-    credits = transaction.credits.map &:first
-    debits  = transaction.debits.map &:first
-    sum_of = ->(integers) { integers.inject(0) { |s,i| s + i } }
-    [sum_of.call(credits), sum_of.call(debits)]
   end
 
   def validate_account! id, account
@@ -167,13 +186,6 @@ class Projector
     end
     unless ACCOUNT_TYPES.include? account.type
       raise InvalidAccount, "Account `#{id}', named `#{account.name}', does not have a type in #{ACCOUNT_TYPES.join(', ')}"
-    end
-  end
-
-  def validate_transaction! transaction
-    credits, debits = total_credits_and_debits_for transaction
-    unless credits == debits
-      raise BalanceError, "Debits and credits do not balance"
     end
   end
 end
