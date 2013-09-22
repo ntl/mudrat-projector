@@ -1,3 +1,4 @@
+require_relative 'account'
 require_relative 'date_diff'
 require_relative 'projector'
 require_relative 'projection'
