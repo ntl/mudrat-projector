@@ -83,6 +83,7 @@ class Projection
 
   def project
     projector.transactions.each do |transaction|
+      next unless transaction_falls_in_range? transaction
       transaction.each_bit do |credit_or_debit, amount, account_id|
         account_projection = account_projections.fetch account_id
         total_amount = get_total_amount range, amount, transaction
@@ -128,6 +129,15 @@ class Projection
       ].inject { |a,v| a * v }
     else
       amount
+    end
+  end
+
+  def transaction_falls_in_range? transaction
+    recurring_schedule = transaction.recurring_schedule
+    if recurring_schedule
+      recurring_schedule.end > from || recurring_schedule.start < to
+    else
+      range.include? transaction.date
     end
   end
 end

@@ -120,6 +120,16 @@ class ProjectorSingleTransactionTest < ProjectionTest
     assert_equal [0, 1000], projection.accounts[:nustartup_inc].delta
   end
 
+  def test_far_future_transaction
+    @projector.add_transaction(
+      date: jan_1_2010,
+      credit: [1000, :nustartup_inc],
+      debit:  [1000, :checking],
+    )
+
+    assert_equal 0, projection.closing_equity
+  end
+
   def test_single_transaction_to_sub_account_without_split
     @projector.split_account :checking, into: %i(checking_sub_1 checking_sub_2)
 
@@ -147,6 +157,7 @@ class ProjectorSingleTransactionTest < ProjectionTest
 
   def test_recurring_transaction_surrounding_the_projection_range
     @projector.add_transaction(
+      date: jan_1_1999,
       credit: [4000, :nustartup_inc],
       debit:  [4000, :checking],
       recurring_schedule: [1, :month],
@@ -156,9 +167,9 @@ class ProjectorSingleTransactionTest < ProjectionTest
 
   def test_recurring_transaction_within_the_projection_range
     @projector.add_transaction(
+      date: feb_1_2000,
       credit: [4000, :nustartup_inc],
       debit:  [4000, :checking],
-      date: feb_1_2000,
       recurring_schedule: [1, :month, may_31_2000],
     )
     assert_equal 16000, projection.closing_equity
