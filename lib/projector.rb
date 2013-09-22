@@ -31,6 +31,11 @@ class Projector
     transactions.push transaction
   end
 
+  def freeze
+    @accounts.freeze
+    @transactions.freeze
+  end
+
   def transactions= transactions
     transactions.each do |transaction_hash|
       add_transaction transaction_hash
@@ -38,6 +43,7 @@ class Projector
   end
 
   def project from: ABSOLUTE_START, to: nil
+    freeze
     Projection.new(
       self,
       from:                from,

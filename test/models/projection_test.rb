@@ -81,8 +81,6 @@ class ProjectorSingleTransactionTest < ProjectionTest
   end
 
   def test_single_transaction_without_split
-    assert_equal 0, projection.closing_equity
-
     @projector.add_transaction(
       date: jan_1_2000,
       credit: [1000, :nustartup_inc],
