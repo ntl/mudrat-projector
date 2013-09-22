@@ -15,6 +15,25 @@ class Projector
     @transactions = []
   end
 
+  class << self
+    def new(existing_projection = nil, **params)
+      if existing_projection
+        import_projection projection: existing_projection
+      else
+        super params
+      end
+    end
+
+    private
+
+    def import_projection projection: projection
+      new(from: projection.to + 1).tap do |projector|
+        projector.accounts     = projection.accounts
+        projector.transactions = projection.transactions
+      end
+    end
+  end
+
   def accounts= accounts_hash
     accounts.clear
     accounts_hash.each { |id, hash| add_account id, hash }
@@ -42,6 +61,7 @@ class Projector
   end
 
   def transactions= transactions
+    @transactions.clear
     transactions.each do |transaction_hash|
       add_transaction transaction_hash
     end
@@ -59,7 +79,7 @@ class Projector
 
   def project to: nil
     freeze
-    Projection.new(self, from: from, to: to).tap &:project
+    Projection.new self, from: from, to: to
   end
 
   def split_account parent_id, into: []
@@ -109,8 +129,11 @@ class Projector
       default[:recurring_schedule] = OpenStruct.new(
         number: recurring_schedule.fetch(0),
         unit:   recurring_schedule.fetch(1),
-        end:    recurring_schedule.fetch(2, ABSOLUTE_END),
-      )
+        from:   hash.fetch(:date),
+        to:     recurring_schedule.fetch(2, ABSOLUTE_END),
+      ).tap do |sched|
+        sched.range = (sched.from..sched.to)
+      end
     end
     OpenStruct.new(default).tap do |t|
       def t.each_bit

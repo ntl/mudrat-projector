@@ -116,8 +116,8 @@ class ProjectorSingleTransactionTest < ProjectionTest
     )
 
     assert_equal 1000, projection.closing_equity
-    assert_equal [0, 1000], projection.accounts[:checking].delta
-    assert_equal [0, 1000], projection.accounts[:nustartup_inc].delta
+    assert_equal [0, 1000], projection.account_projections[:checking].delta
+    assert_equal [0, 1000], projection.account_projections[:nustartup_inc].delta
   end
 
   def test_far_future_transaction
@@ -139,9 +139,9 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debit:  [1000, :checking_sub_1],
     )
 
-    assert_equal [0, 1000], projection.accounts.fetch(:checking).delta
-    assert_equal [0, 1000], projection.accounts.fetch(:checking_sub_1).delta
-    assert_equal [0, 0],    projection.accounts.fetch(:checking_sub_2).delta
+    assert_equal [0, 1000], projection.account_projections.fetch(:checking).delta
+    assert_equal [0, 1000], projection.account_projections.fetch(:checking_sub_1).delta
+    assert_equal [0, 0],    projection.account_projections.fetch(:checking_sub_2).delta
   end
 
   def test_single_transaction_with_split
@@ -175,6 +175,16 @@ class ProjectorSingleTransactionTest < ProjectionTest
     assert_equal 16000, projection.closing_equity
   end
 
+  def test_recurring_transaction_after_the_projection_range
+    @projector.add_transaction(
+      date: feb_1_2001,
+      credit: [4000, :nustartup_inc],
+      debit:  [4000, :checking],
+      recurring_schedule: [1, :month, may_31_2001],
+    )
+    assert_equal 0, projection.closing_equity
+  end
+
   def test_single_transaction_which_does_not_balance
     assert_raises Projector::BalanceError do
       @projector.add_transaction(
@@ -203,5 +213,65 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debit:  [1000, :checking],
     }]
     assert_equal 1, @projector.transactions.size
+  end
+end
+
+class ProjectorSourcedFromProjectionTest < ProjectionTest
+  def setup
+    super
+    @old_projector = @projector
+    @old_projector.accounts = {
+      checking: { type: :asset },
+      nustartup_inc: { type: :revenue },
+      big_company_inc: { type: :revenue, open_date: jul_1_2001 },
+    }
+    @old_projector.transactions = [{
+      date: jan_1_2000,
+      credit: [2000, :nustartup_inc],
+      debit:  [2000, :checking],
+    },{
+      date: jan_1_2000,
+      credit: [4000, :nustartup_inc],
+      debit:  [4000, :checking],
+      recurring_schedule: [1, :month, jun_30_2001],
+    },{
+      date: jul_1_2001,
+      credit: [5000, :big_company_inc],
+      debit:  [5000, :checking],
+      recurring_schedule: [1, :month],
+    },{
+      date: jul_1_2001,
+      credit: [6500, :big_company_inc],
+      debit:  [6500, :checking],
+    }]
+    @initial_projection = @old_projector.project to: dec_31_2000
+    @projector = Projector.new @initial_projection
+  end
+
+  def test_projection_discards_finished_transactions_on_import
+    assert_equal 4, @old_projector.transactions.size
+    assert_equal 3, @projector.transactions.size
+  end
+
+  def test_from_is_set_to_end_of_projection
+    assert_equal jan_1_2001, @projector.from
+  end
+
+  def test_accounts_are_setup_with_opening_balances_matching_prior_closing_balances
+    assert_equal 50000, @projector.accounts[:checking].opening_balance
+    assert_equal 50000, @projector.accounts[:nustartup_inc].opening_balance
+    assert_equal 0,     @projector.accounts[:big_company_inc].opening_balance
+  end
+
+  def test_next_years_projection
+    assert_equal 50000, @initial_projection.closing_equity
+    assert_equal 50000, projection.opening_equity
+    assert_equal 50000 + (24000 + 30000 + 6500), projection.closing_equity
+  end
+
+  private
+
+  def projection
+    @projector.project to: dec_31_2001
   end
 end
