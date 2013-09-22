@@ -25,7 +25,7 @@ class Projection
     end
 
     def delta
-      [initial_balance, balance]
+      balance - initial_balance
     end
 
     def name
