@@ -157,12 +157,23 @@ class ProjectorSingleTransactionTest < ProjectionTest
 
   def test_recurring_transaction_surrounding_the_projection_range
     @projector.add_transaction(
-      date: jan_1_1999,
+      date: jan_1_2000,
       credit: [4000, :nustartup_inc],
       debit:  [4000, :checking],
       recurring_schedule: [1, :month],
     )
     assert_equal 48000, projection.closing_equity
+  end
+
+  def test_recurring_transaction_starting_before_the_projection_range
+    assert_raises Projector::InvalidTransaction do
+      @projector.add_transaction(
+        date: dec_31_1999,
+        credit: [4000, :nustartup_inc],
+        debit:  [4000, :checking],
+        recurring_schedule: [1, :month],
+      )
+    end
   end
 
   def test_recurring_transaction_within_the_projection_range

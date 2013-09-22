@@ -1,9 +1,10 @@
 class Transaction
   attr :credits, :date, :debits, :recurring_schedule
 
-  RecurringSchedule = Struct.new :number, :unit, :from, :to do
-    def range
-      (from..to)
+  RecurringSchedule = Struct.new :number, :unit, :end do
+    def initialize *args
+      super
+      freeze
     end
   end
 
@@ -19,38 +20,62 @@ class Transaction
     freeze
   end
 
-  def active_in_range? range
-    if recurring_schedule
-      schedule_range = recurring_schedule.range
-      if schedule_range.begin < range.begin && schedule_range.end > range.end
-        true
-      else
-        range.include?(schedule_range.begin) ||
-          range.include?(schedule_range.end)
-      end
-    else
-      range.include? date
-    end
+  def after? date
+    date > date
   end
 
   def closes_in_range? range
     if recurring_schedule
-      recurring_schedule.to < range.end
+      recurring_schedule.end < range.end
     else
       date < range.end
     end
   end
 
-  def each_bit
-    credits.each do |amount, account_id|
-      yield :credit, amount, account_id
-    end
-    debits.each do |amount, account_id|
-      yield :debit, amount, account_id
+  def apply! projector, &block
+    validate! projector
+    range = projector.range
+    if date > range.end
+      return self
+    elsif recurring_schedule
+      txn_start = [range.begin, date].max
+      txn_end   = [range.end, recurring_schedule.end].min
+      range_multiplier = [
+        DateDiff.date_diff(
+          unit: recurring_schedule.unit,
+          from: txn_start,
+          to:   txn_end,
+        ),
+        (1.0 / recurring_schedule.number),
+      ].inject &:*
+      each_bit range_multiplier, &block
+      if recurring_schedule.end <= range.end
+        nil
+      else
+        new_start = range.end + 1
+        new_recurring_schedule = [
+          recurring_schedule.number,
+          recurring_schedule.unit,
+          recurring_schedule.end,
+        ]
+        self.class.new(
+          date:    new_start,
+          credits: credits,
+          debits:  debits,
+          recurring_schedule: new_recurring_schedule,
+        )
+      end
+    else
+      each_bit &block
+      nil
     end
   end
 
-  def validate!
+  def validate! projector
+    if projector.from > date
+      raise Projector::InvalidTransaction, "Transactions cannot occur before "\
+        "projection start date. (#{projector.from} vs. #{date})"
+    end
     total_credits, total_debits = total_credits_and_debits
     unless total_credits == total_debits
       raise Projector::BalanceError, "Debits and credits do not balance"
@@ -60,7 +85,16 @@ class Transaction
   private
 
   def build_recurring_schedule number, unit, to = Projector::ABSOLUTE_END
-    RecurringSchedule.new number, unit, date, to
+    RecurringSchedule.new number, unit, to
+  end
+
+  def each_bit multiplier = 1
+    credits.each do |amount, account_id|
+      yield :credit, amount * multiplier, account_id
+    end
+    debits.each do |amount, account_id|
+      yield :debit, amount * multiplier, account_id
+    end
   end
 
   def total_credits_and_debits

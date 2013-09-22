@@ -5,6 +5,7 @@ class Projector
   AccountExists = Class.new ArgumentError
   BalanceError = Class.new ArgumentError
   InvalidAccount = Class.new ArgumentError
+  InvalidTransaction = Class.new ArgumentError
 
   attr :accounts, :from, :transactions
 
@@ -54,7 +55,7 @@ class Projector
     else
       transaction = Transaction.new transaction_or_hash
     end
-    transaction.validate!
+    transaction.validate! self
     transactions.push transaction
   end
 
