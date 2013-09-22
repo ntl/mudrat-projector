@@ -2,13 +2,14 @@ class Projection
   attr :account_projections, :from, :projector, :to
 
   class AccountProjection
-    attr :account, :balance, :initial_balance, :range
-    private :account, :range
+    attr :account, :balance_offset, :initial_balance, :range
+    private :account, :balance_offset, :range
 
     def initialize range, account
-      @range   = range
-      @account = account
-      @balance = 0
+      @range           = range
+      @account         = account
+      @initial_balance = account.opening_balance
+      @balance_offset  = 0
     end
 
     def apply_credit amount
@@ -19,12 +20,12 @@ class Projection
       asset_or_expense? ? add_to_balance(amount) : deduct_from_balance(amount)
     end
 
-    def delta
-      [initial_balance, balance]
+    def balance
+      initial_balance + balance_offset
     end
 
-    def initial_balance
-      0
+    def delta
+      [initial_balance, balance]
     end
 
     def name
@@ -42,7 +43,7 @@ class Projection
     private
 
     def add_to_balance amount
-      @balance += amount
+      @balance_offset += amount
     end
 
     def asset_or_expense?
@@ -50,7 +51,7 @@ class Projection
     end
 
     def deduct_from_balance amount
-      @balance -= amount
+      @balance_offset -= amount
     end
   end
 

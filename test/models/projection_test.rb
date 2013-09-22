@@ -66,6 +66,34 @@ class ProjectorAccountsTest < ProjectionTest
     assert_equal :asset,     child.type
   end
 
+  def test_supplying_an_opening_balance
+    @projector.add_account(
+      :checking,
+      open_date:       jan_1_2000,
+      opening_balance: 500,
+      type:            :asset,
+    )
+    refute @projector.balanced?
+
+    assert_raises Projector::BalanceError do
+      @projector.add_account(
+        :checking,
+        open_date:       jan_2_2000,
+        opening_balance: 500,
+        type:            :asset,
+      )
+    end
+
+    @projector.add_account(
+      :estate,
+      open_date:       jan_1_2000,
+      opening_balance: 500,
+      type:            :equity,
+    )
+    assert @projector.balanced?
+    assert_equal 500, projection.closing_equity
+  end
+
   def test_add_accounts_passes_account_hashes_to_add_account
     assert_equal 0, @projector.accounts.size
     @projector.accounts = { checking: { type: :asset } }

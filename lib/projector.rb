@@ -32,6 +32,10 @@ class Projector
     transactions.push transaction
   end
 
+  def balanced?
+    opening_balance == 0
+  end
+
   def freeze
     @accounts.freeze
     @transactions.freeze
@@ -40,6 +44,16 @@ class Projector
   def transactions= transactions
     transactions.each do |transaction_hash|
       add_transaction transaction_hash
+    end
+  end
+
+  def opening_balance
+    accounts.inject 0 do |balance, (_, account)|
+      if %i(asset expense).include? account.type
+        balance += account.opening_balance
+      else
+        balance -= account.opening_balance
+      end
     end
   end
 
@@ -60,7 +74,13 @@ class Projector
     hash = {
       name: default_account_name(id),
       open_date: from,
+      opening_balance: 0,
     }.merge hash
+    if hash.fetch(:opening_balance) > 0 && hash.fetch(:open_date) > from
+      raise BalanceError, "Projection starts on #{from}, and account "\
+        "#{id.inspect} starts on #{hash[:open_date]} with a nonzero opening "\
+        "balance of #{hash[:opening_balance]}"
+    end
     OpenStruct.new hash
   end
 
