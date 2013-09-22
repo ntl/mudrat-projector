@@ -87,6 +87,10 @@ class Projector
 
   def project to: nil
     freeze
+    unless balanced?
+      raise BalanceError, "You cannot run a projection with accounts that "\
+        "aren't balanced"
+    end
     Projection.new(self, from: from, to: to).tap &:project
   end
 

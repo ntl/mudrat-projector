@@ -91,7 +91,21 @@ class ProjectorAccountsTest < ProjectionTest
       type:            :equity,
     )
     assert @projector.balanced?
-    assert_equal 500, projection.closing_equity
+    assert_equal 500, projection.net_worth
+  end
+
+  def test_accounts_must_be_balanced_to_run_projection
+    @projector.add_account(
+      :checking,
+      open_date:       jan_1_2000,
+      opening_balance: 500,
+      type:            :asset,
+    )
+    refute @projector.balanced?
+
+    assert_raises Projector::BalanceError do
+      @projector.project to: dec_31_2000
+    end
   end
 
   def test_add_accounts_passes_account_hashes_to_add_account
@@ -115,7 +129,7 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debit:  [1000, :checking],
     )
 
-    assert_equal 1000, projection.closing_equity
+    assert_equal 1000, projection.net_worth
     assert_equal [0, 1000], projection.account_projections[:checking].delta
     assert_equal [0, 1000], projection.account_projections[:nustartup_inc].delta
   end
@@ -127,7 +141,7 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debit:  [1000, :checking],
     )
 
-    assert_equal 0, projection.closing_equity
+    assert_equal 0, projection.net_worth
   end
 
   def test_single_transaction_to_sub_account_without_split
@@ -152,7 +166,7 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debits: [ [500, :checking], [500, :savings]],
     )
 
-    assert_equal 1000, projection.closing_equity
+    assert_equal 1000, projection.net_worth
   end
 
   def test_recurring_transaction_surrounding_the_projection_range
@@ -162,7 +176,7 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debit:  [4000, :checking],
       recurring_schedule: [1, :month],
     )
-    assert_equal 48000, projection.closing_equity
+    assert_equal 48000, projection.net_worth
   end
 
   def test_recurring_transaction_starting_before_the_projection_range
@@ -183,7 +197,7 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debit:  [4000, :checking],
       recurring_schedule: [1, :month, may_31_2000],
     )
-    assert_equal 16000, projection.closing_equity
+    assert_equal 16000, projection.net_worth
   end
 
   def test_recurring_transaction_after_the_projection_range
@@ -193,7 +207,7 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debit:  [4000, :checking],
       recurring_schedule: [1, :month, may_31_2001],
     )
-    assert_equal 0, projection.closing_equity
+    assert_equal 0, projection.net_worth
   end
 
   def test_single_transaction_which_does_not_balance
@@ -224,6 +238,34 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debit:  [1000, :checking],
     }]
     assert_equal 1, @projector.transactions.size
+  end
+end
+
+class ProjectorNetWorthTest < ProjectionTest
+  def setup
+    super
+    @projector.accounts = {
+      checking: { type: :asset, opening_balance: 1000 },
+      nustartup_inc: { type: :revenue, opening_balance: 0 },
+      credit_card: { type: :liability, opening_balance: 0 },
+      estate: { type: :equity, opening_balance: 1000 },
+    }
+    @projector.transactions = [{
+      date: jan_1_2000,
+      credit: [2000, :nustartup_inc],
+      debit:  [2000, :checking],
+      recurring_schedule: [1, :month],
+    },{
+      date: jul_1_2000,
+      credit: [5000, :credit_card],
+      debit: [5000, :checking],
+    }]
+  end
+
+  def test_initial_net_worth_is_initial_assets_minus_liabilities
+    assert_equal 1000, projection.initial_net_worth
+    assert_equal 1000 + 24000, projection.net_worth
+    assert_equal 24000, projection.net_worth_delta
   end
 end
 
@@ -275,9 +317,9 @@ class ProjectorSourcedFromProjectionTest < ProjectionTest
   end
 
   def test_next_years_projection
-    assert_equal 50000, @initial_projection.closing_equity
-    assert_equal 50000, projection.opening_equity
-    assert_equal 50000 + (24000 + 30000 + 6500), projection.closing_equity
+    assert_equal 50000, @initial_projection.net_worth
+    assert_equal 50000, projection.initial_net_worth
+    assert_equal 50000 + (24000 + 30000 + 6500), projection.net_worth
   end
 
   private

@@ -79,19 +79,17 @@ class Projection
     end
   end
 
-  def asset_balances method = :balance
-    asset_accounts = account_projections.values.select do |account_projection|
-      account_projection.type == :asset
-    end
-    asset_accounts.map(&method.to_proc).inject(&:+)
+  def accounts_by_type type
+    account_projections.values.select { |ap| ap.type == type }
   end
 
-  def closing_equity
-    asset_balances # - liability_balances, etc.
+  def account_type_balance type, initial = false
+    method_name = initial ? :initial_balance : :balance
+    accounts_by_type(type).map(&method_name).inject 0, &:+
   end
 
-  def opening_equity
-    asset_balances :initial_balance # - liability_balances, etc.
+  def initial_net_worth
+    account_type_balance(:asset, true)  - account_type_balance(:liability, true)
   end
 
   def project
@@ -102,6 +100,14 @@ class Projection
       end
       transactions.push new_transaction if new_transaction
     end
+  end
+
+  def net_worth
+    account_type_balance(:asset) - account_type_balance(:liability)
+  end
+
+  def net_worth_delta
+    net_worth - initial_net_worth
   end
 
   def range
