@@ -43,6 +43,7 @@ class Projector
       default.each do |k,v|
         instance_variable_set "@#{k}", v
       end
+      freeze
     end
 
     def each_bit
@@ -101,8 +102,12 @@ class Projector
     accounts[id] = account
   end
 
-  def add_transaction hash
-    transaction = build_transaction_from_hash hash
+  def add_transaction transaction_or_hash
+    if transaction_or_hash.is_a? Transaction
+      transaction = transaction_or_hash
+    else
+      transaction = build_transaction_from_hash transaction_or_hash
+    end
     transaction.validate!
     transactions.push transaction
   end
@@ -118,8 +123,8 @@ class Projector
 
   def transactions= transactions
     @transactions.clear
-    transactions.each do |transaction_hash|
-      add_transaction transaction_hash
+    transactions.each do |transaction|
+      add_transaction transaction
     end
   end
 

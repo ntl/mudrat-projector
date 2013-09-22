@@ -101,21 +101,6 @@ class Projection
   def transactions
     projector.transactions.reject do |transaction|
       transaction_ends_in_range? transaction
-    end.map do |transaction|
-      {
-        date: transaction.date,
-        debits: transaction.debits,
-        credits: transaction.credits,
-      }.tap do |h|
-        recurring_schedule = transaction.recurring_schedule
-        if recurring_schedule
-          h[:recurring_schedule] = [
-            recurring_schedule.number,
-            recurring_schedule.unit,
-            recurring_schedule.to,
-          ]
-        end
-      end
     end
   end
 
