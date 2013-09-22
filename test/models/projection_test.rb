@@ -2,7 +2,7 @@ require 'test_helper'
 
 class ProjectionTest < Minitest::Unit::TestCase
   def setup
-    @projector = Projector.new
+    @projector = Projector.new from: jan_1_2000
   end
 
   def method_missing sym, *args, &block
@@ -21,7 +21,7 @@ class ProjectionTest < Minitest::Unit::TestCase
   end
 
   def projection
-    @projector.project from: jan_1_2000, to: dec_31_2000
+    @projector.project to: dec_31_2000
   end
 end
 
@@ -47,22 +47,22 @@ class ProjectorAccountsTest < ProjectionTest
     end
   end
 
-  def test_add_accounts_defaults_open_date_to_epoch
+  def test_add_accounts_defaults_open_date_to_start_of_projection
     @projector.add_account :checking, type: :asset
-    assert_equal Date.new(1970, 1, 1), @projector.accounts[:checking].open_date
+    assert_equal jan_1_2000, @projector.accounts[:checking].open_date
   end
 
   def test_adding_a_sub_account
     parent = @projector.add_account(
       :checking,
-      open_date: jan_1_1999,
-      type: :asset,
+      open_date: jan_8_2000,
+      type:      :asset,
     )
 
     child, _ = @projector.split_account :checking, into: %i(checking_sub_1 checking_sub_2)
 
     assert_equal :checking,  child.parent_id
-    assert_equal jan_1_1999, child.open_date
+    assert_equal jan_8_2000, child.open_date
     assert_equal :asset,     child.type
   end
 

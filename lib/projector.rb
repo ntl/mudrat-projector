@@ -7,9 +7,10 @@ class Projector
   BalanceError = Class.new ArgumentError
   InvalidAccount = Class.new ArgumentError
 
-  attr :accounts, :transactions
+  attr :accounts, :from, :transactions
 
-  def initialize
+  def initialize from: ABSOLUTE_START
+    @from = from
     @accounts = {} 
     @transactions = []
   end
@@ -42,7 +43,7 @@ class Projector
     end
   end
 
-  def project from: ABSOLUTE_START, to: nil
+  def project to: nil
     freeze
     Projection.new(
       self,
@@ -62,7 +63,7 @@ class Projector
   def build_account_from_hash id, hash
     hash = {
       name: default_account_name(id),
-      open_date: ABSOLUTE_START,
+      open_date: from,
     }.merge hash
     OpenStruct.new hash
   end
@@ -78,7 +79,7 @@ class Projector
 
   def build_transaction_from_hash hash
     default = {
-      date: ABSOLUTE_START,
+      date: from,
       tags: [],
     }
     default.merge! hash
