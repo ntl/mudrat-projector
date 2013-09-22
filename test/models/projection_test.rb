@@ -130,8 +130,8 @@ class ProjectorSingleTransactionTest < ProjectionTest
     )
 
     assert_equal 1000, projection.net_worth
-    assert_equal 1000, projection.account_projections[:checking].balance
-    assert_equal 1000, projection.account_projections[:nustartup_inc].balance
+    assert_equal 1000, projection.account_balance(:checking)
+    assert_equal 1000, projection.account_balance(:nustartup_inc)
   end
 
   def test_far_future_transaction
@@ -153,9 +153,9 @@ class ProjectorSingleTransactionTest < ProjectionTest
       debit:  [1000, :checking_sub_1],
     )
 
-    assert_equal 1000, projection.account_projections.fetch(:checking).balance
-    assert_equal 1000, projection.account_projections.fetch(:checking_sub_1).balance
-    assert_equal 0,    projection.account_projections.fetch(:checking_sub_2).balance
+    assert_equal 1000, projection.account_balance(:checking)
+    assert_equal 1000, projection.account_balance(:checking_sub_1)
+    assert_equal 0,    projection.account_balance(:checking_sub_2)
   end
 
   def test_single_transaction_with_split

@@ -1,109 +1,78 @@
 class Projection
-  attr :account_projections, :from, :projector, :to, :transactions
+  attr :accounts, :from, :projector, :running_balances, :to, :transactions
+  private :running_balances
 
-  class AccountProjection
-    attr :account, :balance_offset, :initial_balance, :range
-    private :account, :balance_offset, :range
+  class AccountBalance
+    attr :balance, :opening_balance, :type
 
-    def initialize range, account
-      @range           = range
-      @account         = account
-      @initial_balance = account.opening_balance
-      @balance_offset  = 0
+    def initialize balance, type
+      @balance         = balance
+      @opening_balance = balance
+      @type            = type
     end
 
-    def apply_credit amount
-      asset_or_expense? ? deduct_from_balance(amount) : add_to_balance(amount)
+    def credit value
+      @balance = balance.send add_or_deduct(:credit), value
     end
 
-    def apply_debit amount
-      asset_or_expense? ? add_to_balance(amount) : deduct_from_balance(amount)
-    end
-
-    def balance
-      initial_balance + balance_offset
-    end
-
-    def delta
-      balance - initial_balance
-    end
-
-    def name
-      account.name
-    end
-
-    def open_date
-      account.open_date
-    end
-
-    def parent_id
-      account.parent_id
-    end
-
-    def type
-      account.type
+    def debit value
+      @balance = balance.send add_or_deduct(:debit), value
     end
 
     private
 
-    def add_to_balance amount
-      @balance_offset += amount
-    end
-
-    def asset_or_expense?
-      %i(asset expense).include? type
-    end
-
-    def deduct_from_balance amount
-      @balance_offset -= amount
+    def add_or_deduct credit_or_debit
+      should_add = {
+        credit: %i(equity liability revenue),
+        debit:  %i(asset expense),
+      }.fetch(credit_or_debit)
+      should_add ? :+ : :-
     end
   end
 
   def initialize projector, from: nil, to: nil
-    @from                = from
-    @projector           = projector
-    @to                  = to
-    @account_projections = build_account_projections
-    @transactions        = []
+    @from             = from
+    @projector        = projector
+    @to               = to
+    @transactions     = []
+    @running_balances = build_running_balances
+  end
+
+  def account_balance account_id
+    running_balances.fetch(account_id).balance
   end
 
   def accounts
-    account_projections.each_with_object({}) do |(id, account_projection), hash|
-      hash[id] = {
-        open_date:       account_projection.open_date,
-        opening_balance: account_projection.balance,
-        parent_id:       account_projection.parent_id,
-        name:            account_projection.name,
-        type:            account_projection.type,
-      }
+    projector.accounts.each_with_object Hash.new do |(id, account), hash|
+      hash[id] = Account.new(
+        id,
+        open_date:       account.open_date,
+        opening_balance: running_balances.fetch(id).balance,
+        parent_id:       account.parent_id,
+        type:            account.type,
+      )
     end
   end
 
-  def accounts_by_type type
-    account_projections.values.select { |ap| ap.type == type }
-  end
-
-  def account_type_balance type, initial = false
-    method_name = initial ? :initial_balance : :balance
-    accounts_by_type(type).map(&method_name).inject 0, &:+
-  end
-
   def initial_net_worth
-    account_type_balance(:asset, true)  - account_type_balance(:liability, true)
+    sum_balance_for_type(:opening_balance, :asset) - 
+      sum_balance_for_type(:opening_balance, :liability)
   end
 
   def project
     projector.transactions.each do |transaction|
       new_transaction = transaction.apply! self do |credit_or_debit, amount, account_id|
-        account_projection = account_projections.fetch account_id
-        apply_transaction_bit credit_or_debit, amount, account_projection
+        to_account_and_parents account_id do |account|
+          running_balances.fetch(account.id).send credit_or_debit, amount
+        end
       end
       transactions.push new_transaction if new_transaction
     end
   end
 
   def net_worth
-    account_type_balance(:asset) - account_type_balance(:liability)
+    sum_balance_for_type(:balance, :asset) -
+      sum_balance_for_type(:balance, :liability)
   end
 
   def net_worth_delta
@@ -116,18 +85,28 @@ class Projection
 
   private
 
-  def apply_transaction_bit method, amount, account_projection
-    while account_projection
-      account_projection.send "apply_#{method}", amount
-      _, account_projection = account_projections.detect do |id, ap|
-        id == account_projection.parent_id
-      end
+  def account_ids_for_type type
+    projector.accounts.select { |id, account| account.type == type }.map &:first
+  end
+
+  def build_running_balances
+    projector.accounts.each_with_object Hash.new do |(id, account), hash|
+      hash[id] = AccountBalance.new account.opening_balance, account.type
     end
   end
 
-  def build_account_projections
-    projector.accounts.each_with_object Hash.new do |(id, account), hash|
-      hash[id] = AccountProjection.new(range, account)
+  def sum_balance_for_type balance_method, type
+    account_ids_for_type(type).inject 0 do |sum, id|
+      sum + running_balances.fetch(id).public_send(balance_method)
     end
   end
+
+  def to_account_and_parents account_id
+    while account_id
+      account = projector.accounts.fetch account_id
+      yield account
+      account_id = account.parent_id
+    end
+  end
+
 end

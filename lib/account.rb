@@ -12,6 +12,10 @@ class Account
     @type            = params.fetch :type
   end
 
+  def asset_or_expense?
+    %i(asset expense).include? type
+  end
+
   def validate! projector
     existing_account = projector.accounts[id]
     if existing_account
