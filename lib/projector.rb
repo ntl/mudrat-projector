@@ -1,7 +1,7 @@
 class Projector
   ABSOLUTE_START = Date.new 1970, 1, 1
   ABSOLUTE_END   = Date.new 9999, 1, 1
-  ACCOUNT_TYPES = %i(asset expense liability revenue)
+  ACCOUNT_TYPES = %i(asset expense liability revenue equity)
 
   AccountExists = Class.new ArgumentError
   BalanceError = Class.new ArgumentError
@@ -45,11 +45,7 @@ class Projector
 
   def project to: nil
     freeze
-    Projection.new(
-      self,
-      from:                from,
-      to:                  to,
-    ).tap &:project
+    Projection.new(self, from: from, to: to).tap &:project
   end
 
   def split_account parent_id, into: []
