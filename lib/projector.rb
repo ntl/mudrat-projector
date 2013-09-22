@@ -18,6 +18,12 @@ class Projector
   class Transaction
     attr :credits, :date, :debits, :recurring_schedule
 
+    RecurringSchedule = Struct.new :number, :unit, :from, :to do
+      def range
+        (from..to)
+      end
+    end
+
     def initialize projector, params = {}
       @date = params.fetch(:date) || projector.from
       @credits = Array params[:credits]
@@ -49,14 +55,7 @@ class Projector
     private
 
     def build_recurring_schedule number, unit, to = Projector::ABSOLUTE_END
-      OpenStruct.new(
-        number: number,
-        unit:   unit,
-        from:   date,
-        to:     to,
-      ).tap do |sched|
-        sched.range = (sched.from..sched.to)
-      end
+      RecurringSchedule.new number, unit, date, to
     end
 
     def total_credits_and_debits
