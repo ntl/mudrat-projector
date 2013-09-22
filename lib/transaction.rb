@@ -19,6 +19,28 @@ class Transaction
     freeze
   end
 
+  def active_in_range? range
+    if recurring_schedule
+      schedule_range = recurring_schedule.range
+      if schedule_range.begin < range.begin && schedule_range.end > range.end
+        true
+      else
+        range.include?(schedule_range.begin) ||
+          range.include?(schedule_range.end)
+      end
+    else
+      range.include? date
+    end
+  end
+
+  def closes_in_range? range
+    if recurring_schedule
+      recurring_schedule.to < range.end
+    else
+      date < range.end
+    end
+  end
+
   def each_bit
     credits.each do |amount, account_id|
       yield :credit, amount, account_id

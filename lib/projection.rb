@@ -99,9 +99,7 @@ class Projection
   end
 
   def transactions
-    projector.transactions.reject do |transaction|
-      transaction_ends_in_range? transaction
-    end
+    projector.transactions.reject { |t| t.closes_in_range? range }
   end
 
   private
@@ -142,36 +140,12 @@ class Projection
 
   def project
     projector.transactions.each do |transaction|
-      next unless transaction_falls_in_range? transaction
+      next unless transaction.active_in_range? range
       transaction.each_bit do |credit_or_debit, amount, account_id|
         account_projection = account_projections.fetch account_id
         total_amount = get_total_amount amount, transaction
         apply_transaction_bit credit_or_debit, total_amount, account_projection
       end
-    end
-  end
-
-  def transaction_ends_in_range? transaction
-    recurring_schedule = transaction.recurring_schedule
-    if recurring_schedule
-      recurring_schedule.to < to
-    else
-      transaction.date < to
-    end
-  end
-
-  def transaction_falls_in_range? transaction
-    recurring_schedule = transaction.recurring_schedule
-    if recurring_schedule
-      schedule_range = recurring_schedule.range
-      if schedule_range.begin < range.begin && schedule_range.end > range.end
-        true
-      else
-        range.include?(recurring_schedule.range.begin) ||
-          range.include?(recurring_schedule.range.end)
-      end
-    else
-      range.include? transaction.date
     end
   end
 end
