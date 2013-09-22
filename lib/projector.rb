@@ -15,6 +15,43 @@ class Projector
     @transactions = []
   end
 
+  class Account
+    attr :id, :name, :open_date, :opening_balance, :parent_id, :type
+
+    def initialize id, params = {}
+      @id              = id
+      @name            = params.fetch :name, default_account_name
+      @open_date       = params.fetch :open_date, Projector::ABSOLUTE_START
+      @opening_balance = params.fetch :opening_balance, 0
+      @parent_id       = params.fetch :parent_id, nil
+      @type            = params.fetch :type
+    end
+
+    def validate! projector
+      existing_account = projector.accounts[id]
+      if existing_account
+        raise AccountExists, "Account `#{id}' exists; name is `#{existing_account.name}'"
+      end
+      unless ACCOUNT_TYPES.include? type
+        raise InvalidAccount, "Account `#{name}', does not have a type in "\
+          "#{ACCOUNT_TYPES.join(', ')}"
+      end
+      if opening_balance > 0 && open_date > projector.from
+        raise BalanceError, "Projection starts on #{projector.from}, and account "\
+          "`#{name}' starts on #{open_date} with a nonzero opening "\
+          "balance of #{opening_balance}"
+      end
+    end
+
+    private
+
+    def default_account_name
+      id.to_s.capitalize.gsub(/_[a-z]/) do |dash_letter|
+        dash_letter[1].upcase
+      end
+    end
+  end
+
   class << self
     def new(existing_projection = nil, **params)
       if existing_projection
@@ -40,8 +77,8 @@ class Projector
   end
 
   def add_account id, hash
-    account = build_account_from_hash id, hash
-    validate_account! id, account
+    account = Account.new id, hash
+    account.validate! self
     accounts[id] = account
   end
 
@@ -94,20 +131,6 @@ class Projector
 
   private
 
-  def build_account_from_hash id, hash
-    hash = {
-      name: default_account_name(id),
-      open_date: from,
-      opening_balance: 0,
-    }.merge hash
-    if hash.fetch(:opening_balance) > 0 && hash.fetch(:open_date) > from
-      raise BalanceError, "Projection starts on #{from}, and account "\
-        "#{id.inspect} starts on #{hash[:open_date]} with a nonzero opening "\
-        "balance of #{hash[:opening_balance]}"
-    end
-    OpenStruct.new hash
-  end
-
   def build_child_account_hash parent_id
     parent = accounts.fetch parent_id
     {
@@ -117,19 +140,4 @@ class Projector
     }
   end
 
-  def default_account_name id
-    id.to_s.capitalize.gsub(/_[a-z]/) do |dash_letter|
-      dash_letter[1].upcase
-    end
-  end
-
-  def validate_account! id, account
-    existing_account = accounts[id]
-    if existing_account
-      raise AccountExists, "Account `#{id}' exists; name is `#{existing_account.name}'"
-    end
-    unless ACCOUNT_TYPES.include? account.type
-      raise InvalidAccount, "Account `#{id}', named `#{account.name}', does not have a type in #{ACCOUNT_TYPES.join(', ')}"
-    end
-  end
 end

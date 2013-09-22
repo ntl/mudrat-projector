@@ -47,9 +47,9 @@ class ProjectorAccountsTest < ProjectionTest
     end
   end
 
-  def test_add_accounts_defaults_open_date_to_start_of_projection
+  def test_add_accounts_defaults_open_date_to_epoch
     @projector.add_account :checking, type: :asset
-    assert_equal jan_1_2000, @projector.accounts[:checking].open_date
+    assert_equal epoch, @projector.accounts[:checking].open_date
   end
 
   def test_adding_a_sub_account
@@ -77,7 +77,7 @@ class ProjectorAccountsTest < ProjectionTest
 
     assert_raises Projector::BalanceError do
       @projector.add_account(
-        :checking,
+        :savings,
         open_date:       jan_2_2000,
         opening_balance: 500,
         type:            :asset,
