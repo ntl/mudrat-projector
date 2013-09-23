@@ -366,7 +366,7 @@ class ProjectorCompoundInterestTest < ProjectionTest
         annual_interest: 3.000,
         initial_value:   200000,
         months:          360,
-        type:            :compound,
+        type:            :mortgage,
       },
     },{
       date: jul_1_2000,
