@@ -4,6 +4,7 @@ require 'minitest/autorun'
 require 'minitest/reporters'
 
 require 'ostruct'
+require 'pp'
 require 'pry'
 
 load File.expand_path('../../lib/load.rb', __FILE__)

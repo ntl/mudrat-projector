@@ -340,40 +340,113 @@ end
 
 class ProjectorCompoundInterestTest < ProjectionTest
   def setup
-    skip
+    super
     @projector.accounts = {
-      checking:      { type: :asset,     },
-      loan:          { type: :liability, },
-      loan_interest: { type: :expense,   },
+      checking:           { type: :asset,     },
+      investment:         { type: :asset,     open_date: jul_1_2000 },
+      investment_revenue: { type: :revenue,   open_date: jul_1_2000 },
+      loan:               { type: :liability, },
+      loan_interest:      { type: :expense,   },
     }
 
     @projector.transactions = [{
-      date: jan_1_2000,
-      credit: [{ amount: :payment,       account: :checking },
-               { amount: :initial_value, account: :loan }],
-      debits: [{ amount: :interest,      account: :loan_interest },
-               { amount: :principal,     account: :loan },
-               { amount: :initial_value, account: :checking }],
+      date: jul_1_2000,
+      credit:   [200000, :loan], #{ amount: 200000,         account: :loan },
+      debit:    [200000, :checking], #{ amount: 200000,         account: :checking },
+    },{
+      date: jul_1_2000,
+      credit: [200000, :checking],
+      debit:  [200000, :investment],
+    },{
+      date: jul_1_2000,
+      credit:   { amount: :payment,       account: :checking },
+      debits:  [{ amount: :interest,      account: :loan_interest },
+                { amount: :principal,     account: :loan }],
       schedule: {
-        initial_value: 200000,
-        interest:      5.000,
-        term_length:   360,
-        term_unit:     :month,
-        type:          :compound,
+        annual_interest: 3.000,
+        initial_value:   200000,
+        months:          360,
+        type:            :compound,
+      },
+    },{
+      date: jul_1_2000,
+      debit:    { amount: :payment,   account: :investment },
+      credits: [{ amount: :principal, account: :investment },
+                { amount: :interest,  account: :investment_revenue }],
+      schedule: {
+        annual_interest: 6.000,
+        initial_value:   200000,
+        type:            :compound,
       },
     }]
   end
 
-  def test_interest_and_principal_paid_in_first_year
-    interest  = 4984.90
-    principal = 1456.96
+  def test_borrow_at_three_lend_at_six_hit_the_course_nine
+    p1 = projection
 
-    assert_equal interest, projection.account_balance(:loan_interest)
-    assert_equal 0 - (interest + principal), projection.account_balance(:checking)
-    assert_equal 200000 - principal, projection.account_balance(:loan)
+    expected_balances = expected_dec_31_2000_balances
+    %i(investment investment_revenue loan loan_interest checking).each do |account_id|
+      expected_balance = expected_balances.fetch account_id
+      actual_balance   = p1.account_balance account_id
+      assert_equal_balances account_id, expected_balance, actual_balance
+    end
+    assert_equal_balances :net_worth, expected_2000_net_worth, p1.net_worth
 
-    assert_equal 200000 - (interest + prinicpal) - (20000 - princpal),
-      projection.net_worth
+    p2 = Projector.new(p1).project to: jun_30_2015
+    p3 = Projector.new(p2).project to: dec_31_2050
+    p4 = Projector.new(p2).project to: jun_30_2030
+
+    assert_equal_balances :loan, 0, p3.account_balance(:loan)
+    assert_equal_balances :loan, 0, p4.account_balance(:loan)
+    assert_equal_balances :investment, investment_value_at(jun_30_2030), p4.account_balance(:investment)
+    assert_equal_balances :investment, investment_value_at(dec_31_2050), p3.account_balance(:investment)
+
+    assert_equal_balances :loan_interest, lifetime_loan_interest, p4.account_balance(:loan_interest)
+    assert_equal_balances :net_worth, expected_2030_net_worth, p4.net_worth
+  end
+
+  private
+
+  def assert_equal_balances account_id, expected, actual
+    assert_equal expected.to_d, actual.to_d,
+      "Expected #{account_id.inspect} balance to equal "\
+      "#{expected.round(2).to_f}, but instead was "\
+      "#{actual.round(2).to_f}"
+  end
+
+  def expected_dec_31_2000_balances
+    loan_amount          = 200000
+    loan_interest        = 2987.09.to_d
+    loan_principal       = 2072.16.to_d
+    investment_amount    = 200000
+    investment_interest  = 6075.50.to_d
+    {
+      checking:           0 - (loan_interest + loan_principal),
+      investment:         investment_amount + investment_interest,
+      investment_revenue: investment_interest,
+      loan:               loan_amount - loan_principal,
+      loan_interest:      loan_interest,
+    }
+  end
+
+  def expected_2000_net_worth
+    expected_balances = expected_dec_31_2000_balances
+    expected_balances[:investment] + expected_balances[:checking] -
+      expected_balances[:loan]
+  end
+
+  def expected_2030_net_worth
+    investment_value_at(jun_30_2030) - 200000 - 103554.91
+  end
+
+  def lifetime_loan_interest
+    103554.91
+  end
+
+  def investment_value_at date
+    months_between = DateDiff.date_diff :month, jul_1_2000, date
+    r = 6.0.to_d / 1200
+    (200000 * ((1 + r) ** months_between)).round 2
   end
 end
 

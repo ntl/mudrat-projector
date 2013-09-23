@@ -87,16 +87,22 @@ class Projector
 
   def project to: nil
     freeze
-    unless balanced?
-      raise BalanceError, "You cannot run a projection with accounts that "\
-        "aren't balanced"
-    end
+    must_be_balanced!
     Projection.new(self, from: from, to: to).tap &:project
   end
 
   def split_account parent_id, into: []
     accounts.fetch(parent_id).split(into: into).each do |child|
       add_account child.id, child
+    end
+  end
+
+  private
+
+  def must_be_balanced!
+    unless balanced?
+      raise BalanceError, "You cannot run a projection with accounts that "\
+        "aren't balanced; balance is #{opening_balance.inspect}"
     end
   end
 

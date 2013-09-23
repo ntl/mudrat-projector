@@ -26,7 +26,7 @@ class Projection
         credit: %i(equity liability revenue),
         debit:  %i(asset expense),
       }.fetch(credit_or_debit)
-      should_add ? :+ : :-
+      should_add.include?(type) ? :+ : :-
     end
   end
 
@@ -44,10 +44,11 @@ class Projection
 
   def accounts
     projector.accounts.each_with_object Hash.new do |(id, account), hash|
+      new_opening_balance = account_balance id
       hash[id] = Account.new(
         id,
         open_date:       account.open_date,
-        opening_balance: running_balances.fetch(id).balance,
+        opening_balance: new_opening_balance,
         parent_id:       account.parent_id,
         type:            account.type,
       )
