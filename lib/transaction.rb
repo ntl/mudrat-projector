@@ -41,10 +41,10 @@ class Transaction
   class RecurringSchedule < OneTimeSchedule
     attr :end, :number, :unit
       
-    def initialize date, number, unit, _end
-      @end    = _end
-      @number = number
-      @unit   = unit
+    def initialize date, params = {}
+      @end    = params[:end] || Projector::ABSOLUTE_END
+      @number = params.fetch :number
+      @unit   = params.fetch :unit
       super date
     end
 
@@ -66,6 +66,15 @@ class Transaction
       date < other_date
     end
 
+    def to_hash
+      {
+        end:    self.end,
+        number: number,
+        type:   :recurring,
+        unit:   unit,
+      }
+    end
+
     def recurring?
       true
     end
@@ -81,10 +90,10 @@ class Transaction
     def remainder_transaction transaction, range
       return nil if self.end <= range.end
       Transaction.new(
-        date:    range.end + 1,
-        credits: transaction.credits,
-        debits:  transaction.debits,
-        recurring_schedule: [number, unit, self.end],
+        date:     range.end + 1,
+        credits:  transaction.credits,
+        debits:   transaction.debits,
+        schedule: to_hash,
       )
     end
   end
@@ -95,11 +104,7 @@ class Transaction
     @debits  = Array params[:debits]
     @credits << params[:credit] if params[:credit]
     @debits  << params[:debit]  if params[:debit]
-    if params[:recurring_schedule]
-      @schedule = build_recurring_schedule date, *params[:recurring_schedule]
-    else
-      @schedule = OneTimeSchedule.new date
-    end
+    @schedule = build_schedule date, params[:schedule]
     freeze
   end
 
@@ -110,10 +115,6 @@ class Transaction
     else
       schedule.apply! self, projector.range, &block
     end
-  end
-
-  def recurring_schedule
-    schedule
   end
 
   def validate! projector
@@ -129,8 +130,20 @@ class Transaction
 
   private
 
-  def build_recurring_schedule date, number, unit, to = Projector::ABSOLUTE_END
-    RecurringSchedule.new date, number, unit, to
+  def build_schedule date, params = {}
+    if params.nil?
+      OneTimeSchedule.new date
+    else
+      fetch_schedule_klass(params.fetch(:type)).new date, params
+    end
+  end
+
+  def fetch_schedule_klass type
+    classified_type = type.to_s
+    classified_type.insert 0, '_'
+    classified_type.gsub!(%r{_[a-z]}) { |match| match[1].upcase }
+    classified_type.concat 'Schedule'
+    self.class.const_get classified_type
   end
 
   def total_credits_and_debits
