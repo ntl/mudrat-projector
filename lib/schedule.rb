@@ -162,11 +162,17 @@ class CompoundSchedule < Schedule
         payment:   payment,
       }
       credits.each do |credit|
-        amount = decode_amount_key.fetch credit.fetch :amount
+        amount = credit.fetch :amount
+        unless amount.is_a? Numeric
+          amount = decode_amount_key.fetch amount
+        end
         yield :credit, amount, credit.fetch(:account)
       end
       debits.each do |debit|
-        amount = decode_amount_key.fetch debit.fetch :amount
+        amount = debit.fetch :amount
+        unless amount.is_a? Numeric
+          amount = decode_amount_key.fetch amount
+        end
         yield :debit, amount, debit.fetch(:account)
       end
     end
@@ -187,7 +193,9 @@ class CompoundSchedule < Schedule
   end
 
   def apply! transaction, range, &block
-    result = Projector.with_banker_rounding { amortize range }
+    result = Projector.with_banker_rounding do
+      amortize range, extra_principal_for(transaction)
+    end
     result.yield_over_each_bit transaction.credits, transaction.debits, &block
     return nil if result.balance.zero?
     result.next_transaction transaction, next_schedule(result)
@@ -205,12 +213,13 @@ class CompoundSchedule < Schedule
   end
 
   def transaction_balanced? transaction
-    true
+    extra_principal_amount(transaction, :debits) ==
+      extra_principal_amount(transaction, :credits)
   end
 
   private
 
-  def amortize range
+  def amortize range, extra_principal_per_payment
     months_amortized = DateDiff.date_diff(:month, [range.begin, date].max, range.end).to_i
     new_balance = initial_value * ((1 + rate) ** months_amortized)
     interest_paid  = new_balance - initial_value
@@ -219,6 +228,21 @@ class CompoundSchedule < Schedule
       balance: new_balance, 
       interest: interest_paid
     )
+  end
+
+  def extra_principal_for transaction
+    extra_principal_amount transaction, :debits
+  end
+
+  def extra_principal_amount transaction, credits_or_debits
+    transaction.public_send(credits_or_debits).reduce 0 do |sum, bit|
+      amount = bit.fetch :amount
+      if amount.is_a? Numeric
+        sum + amount
+      else
+        sum
+      end
+    end
   end
 
   def next_schedule result
@@ -244,7 +268,7 @@ class MortgageSchedule < CompoundSchedule
 
   private
 
-  def amortize range, &block
+  def amortize range, extra_principal_per_payment = 0
     r  = rate
     mp = monthly_payment
 
@@ -257,7 +281,7 @@ class MortgageSchedule < CompoundSchedule
 
     new_balance = months_to_amortize.times.inject initial_value do |balance, _|
       interest    = balance * r
-      principal   = mp - interest
+      principal   = (mp - interest) + extra_principal_per_payment
       interest_paid  += interest
       principal_paid += principal
       balance - principal

@@ -405,6 +405,27 @@ class ProjectorCompoundInterestTest < ProjectionTest
     assert_equal_balances :net_worth, expected_2030_net_worth, p4.net_worth
   end
 
+  def test_extra_principal_each_month
+    transaction = @projector.transactions.fetch 2
+    transaction.credits.push(amount: 100, account: :checking)
+    transaction.debits.push( amount: 100, account: :loan)
+
+    expected_balances = expected_dec_31_2000_balances
+    assert_equal_balances :loan, expected_balances.fetch(:loan) - 703.76, projection.account_balance(:loan)
+
+    transaction.validate! @projector
+    transaction.credits.push(amount: 100, account: :checking)
+    transaction.debits.push( amount: 101, account: :loan)
+    assert_raises Projector::BalanceError do
+      transaction.validate! @projector
+    end
+
+    # Need to add good validation, and either move the implementation into
+    # the MortgageSchedule class, or handle extra principal on the base
+    # CompoundSchedule class
+    fail
+  end
+
   private
 
   def assert_equal_balances account_id, expected, actual
