@@ -21,6 +21,12 @@ class Schedule
       classified.slice! 0, 1
     end
   end
+
+  def validate! transaction
+    unless transaction_balanced? transaction
+      raise Projector::BalanceError, "Debits and credits do not balance"
+    end
+  end
 end
 
 class OneTimeSchedule < Schedule
@@ -194,7 +200,7 @@ class CompoundSchedule < Schedule
 
   def apply! transaction, range, &block
     result = Projector.with_banker_rounding do
-      amortize range, extra_principal_for(transaction)
+      amortize range
     end
     result.yield_over_each_bit transaction.credits, transaction.debits, &block
     return nil if result.balance.zero?
@@ -212,14 +218,16 @@ class CompoundSchedule < Schedule
     annual_interest.to_d / 1200
   end
 
-  def transaction_balanced? transaction
-    extra_principal_amount(transaction, :debits) ==
-      extra_principal_amount(transaction, :credits)
+  def validate! transaction
+    if extra_principal_for? transaction
+      raise Projector::InvalidTransaction, "You cannot supply extra debit or "\
+        "credits on a compound interest schedule"
+    end
   end
 
   private
 
-  def amortize range, extra_principal_per_payment
+  def amortize range
     months_amortized = DateDiff.date_diff(:month, [range.begin, date].max, range.end).to_i
     new_balance = initial_value * ((1 + rate) ** months_amortized)
     interest_paid  = new_balance - initial_value
@@ -234,7 +242,12 @@ class CompoundSchedule < Schedule
     extra_principal_amount transaction, :debits
   end
 
-  def extra_principal_amount transaction, credits_or_debits
+  def extra_principal_for? transaction
+    extra_principal_amount(transaction, :debits) != 0 ||
+      extra_principal_amount(transaction, :credits) != 0
+  end
+
+  def extra_principal_amount transaction, credits_or_debits = :both
     transaction.public_send(credits_or_debits).reduce 0 do |sum, bit|
       amount = bit.fetch :amount
       if amount.is_a? Numeric
@@ -255,15 +268,60 @@ class CompoundSchedule < Schedule
 end
 
 class MortgageSchedule < CompoundSchedule
-  attr :months
+  attr :account_map, :months
 
   def initialize date, params = {}
-    @months = params.fetch :months
+    @months      = params.fetch :months
+    @account_map = params.fetch :accounts
     super date, params
+  end
+
+  def apply! transaction, range, &block
+    result = Projector.with_banker_rounding do
+      amortize range, extra_principal_for(transaction)
+    end
+    result.yield_over_each_bit transaction.credits, transaction.debits, &block
+    return nil if result.balance.zero?
+    result.next_transaction transaction, next_schedule(result)
+  end
+
+  def liability_account
+    account_map.fetch :principal
+  end
+
+  def interest_account
+    account_map.fetch :interest
+  end
+
+  def payment_account
+    account_map.fetch :payment
   end
 
   def final_month
     (date >> months) - 1
+  end
+
+  def validate! transaction
+    unless transaction_balanced? transaction
+      raise Projector::BalanceError, "Debits and credits for extra principal payments do not balance"
+    end
+    %i(interest payment principal).each do |route|
+      unless account_map.has_key? route
+        raise Projector::InvalidTransaction, "Schedule must supply accounts, missing #{route.inspect}"
+      end
+    end
+    transaction.debits.each do |bit|
+      account = bit.fetch :account
+      next if bit.fetch(:amount).is_a? Symbol
+      unless account == liability_account
+        raise Projector::InvalidTransaction, "Extra payments must go to liability or payment account (#{account.inspect} must equal #{payment_account.inspect}"
+      end
+    end
+  end
+
+  def transaction_balanced? transaction
+    extra_principal_amount(transaction, :debits) ==
+      extra_principal_amount(transaction, :credits)
   end
 
   private
@@ -300,7 +358,8 @@ class MortgageSchedule < CompoundSchedule
 
   def next_schedule result
     super.tap do |hash|
-      hash[:months] = months - result.months_amortized
+      hash[:months]   = months - result.months_amortized
+      hash[:accounts] = @account_map
     end
   end
 end

@@ -363,6 +363,11 @@ class ProjectorCompoundInterestTest < ProjectionTest
       debits:  [{ amount: :interest,      account: :loan_interest },
                 { amount: :principal,     account: :loan }],
       schedule: {
+        accounts: {
+          interest:  :loan_interest,
+          payment:   :checking,
+          principal: :loan,
+        },
         annual_interest: 3.000,
         initial_value:   200000,
         months:          360,
@@ -413,6 +418,7 @@ class ProjectorCompoundInterestTest < ProjectionTest
     expected_balances = expected_dec_31_2000_balances
     assert_equal_balances :loan, expected_balances.fetch(:loan) - 703.76, projection.account_balance(:loan)
 
+    # Extra principal payments must balance
     transaction.validate! @projector
     transaction.credits.push(amount: 100, account: :checking)
     transaction.debits.push( amount: 101, account: :loan)
@@ -420,10 +426,22 @@ class ProjectorCompoundInterestTest < ProjectionTest
       transaction.validate! @projector
     end
 
-    # Need to add good validation, and either move the implementation into
-    # the MortgageSchedule class, or handle extra principal on the base
-    # CompoundSchedule class
-    fail
+    # Extra principal payments must route to the correct accounts
+    transaction.credits.pop
+    transaction.debits.pop
+    transaction.credits.push(amount: 100, account: :checking)
+    transaction.debits.push( amount: 100, account: :checking)
+    assert_raises Projector::InvalidTransaction do
+      transaction.validate! @projector
+    end
+
+    # Only mortgages can have extra principal payments
+    transaction = @projector.transactions.fetch 3
+    transaction.credits.push(amount: 100, account: :checking)
+    transaction.debits.push( amount: 100, account: :investment)
+    assert_raises Projector::InvalidTransaction do
+      transaction.validate! @projector
+    end
   end
 
   private

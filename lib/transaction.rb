@@ -20,14 +20,16 @@ class Transaction
     end
   end
 
+  def credits_and_debits
+    credits + debits
+  end
+
   def validate! projector
     if schedule.before? projector.from
       raise Projector::InvalidTransaction, "Transactions cannot occur before "\
         "projection start date. (#{projector.from} vs. #{schedule.date})"
     end
-    unless schedule.transaction_balanced? self
-      raise Projector::BalanceError, "Debits and credits do not balance"
-    end
+    schedule.validate! self
   end
 
   private
