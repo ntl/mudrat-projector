@@ -126,76 +126,6 @@ end
 class CompoundSchedule < Schedule
   attr :account_map, :annual_interest, :initial_value
 
-  class CompoundResult
-    attr :balance, :end, :range
-
-    def initialize range: range, schedule: schedule
-      months_amortized = DateDiff.date_diff(:month, [range.begin, schedule.date].max, range.end).to_i
-
-      @range     = range
-      @schedule  = schedule
-      @balance   = schedule.initial_value * ((1 + schedule.rate) ** months_amortized)
-      @interest  = @balance - schedule.initial_value
-      @principal = 0
-    end
-
-    def inspect
-      { balance: balance.to_f, range: range, interest: interest.to_f, principal: principal.to_f}.inspect
-    end
-
-    def interest
-      @interest.round 2
-    end
-
-    def next_transaction transaction, schedule
-      Transaction.new(
-        date:     range.end + 1,
-        credits:  transaction.credits,
-        debits:   transaction.debits,
-        schedule: schedule,
-      )
-    end
-
-    def principal
-      @principal.round 2
-    end
-
-    def payment
-      interest + principal
-    end
-  end
-
-  class MortgageResult < CompoundResult
-    attr :months_amortized
-
-    def initialize range: range, schedule: schedule, extra_principal: 0
-      @range = range
-
-      r  = schedule.rate
-      mp = schedule.monthly_payment
-
-      range_begin = [range.begin, schedule.date].max
-      range_end   = [range.end,   schedule.final_month].min
-      months_to_amortize = DateDiff.date_diff(:month, range_begin, range_end).to_i
-
-      interest_paid  = 0
-      principal_paid = 0
-
-      new_balance = months_to_amortize.times.inject schedule.initial_value do |balance, _|
-        interest    = balance * r
-        principal   = (mp - interest) + extra_principal
-        interest_paid  += interest
-        principal_paid += principal
-        balance - principal
-      end
-
-      @balance          = new_balance
-      @interest         = interest_paid
-      @principal        = principal_paid
-      @months_amortized = months_to_amortize
-    end
-  end
-
   def initialize date, params = {}
     @annual_interest = params.fetch :annual_interest
     @initial_value   = params.fetch :initial_value
@@ -203,22 +133,25 @@ class CompoundSchedule < Schedule
     super date
   end
 
-  def apply! transaction, range, &block
-    result = Projector.with_banker_rounding do
-      CompoundResult.new(
-        range:    range,
-        schedule: self,
-      )
+  def apply! transaction, projection_range, &block
+    amortizer = build_amortizer transaction, projection_range
+    yield_for_each_bit_on_amortizer amortizer, &block
+    return nil if amortizer.balance.zero?
+    amortizer.next_transaction transaction, next_schedule(amortizer)
+  end
+
+  def build_amortizer transaction, projection_range
+    Projector.with_banker_rounding do
+      CompoundInterestAmortizer.new self, projection_range
     end
-    yield :credit, result.interest,  interest_account
-    yield :credit, result.principal, principal_account
-    yield :debit,  result.payment,   payment_account
-    return nil if result.balance.zero?
-    result.next_transaction transaction, next_schedule(result)
   end
 
   def interest_account
     account_map.fetch :interest
+  end
+
+  def final_month
+    Projector::ABSOLUTE_END
   end
 
   def next_schedule result
@@ -238,6 +171,10 @@ class CompoundSchedule < Schedule
     account_map.fetch :principal
   end
 
+  def range
+    (date..final_month)
+  end
+
   def rate
     annual_interest.to_d / 1200
   end
@@ -247,6 +184,12 @@ class CompoundSchedule < Schedule
       raise Projector::InvalidTransaction, "You cannot supply extra debit or "\
         "credits on a compound interest schedule"
     end
+  end
+
+  def yield_for_each_bit_on_amortizer amortizer
+    yield :credit, amortizer.interest,  interest_account
+    yield :credit, amortizer.principal, principal_account
+    yield :debit,  amortizer.payment,   payment_account
   end
 end
 
@@ -258,20 +201,14 @@ class MortgageSchedule < CompoundSchedule
     super date, params
   end
 
-  def apply! transaction, range, &block
-    result = Projector.with_banker_rounding do
-      MortgageResult.new(
-        extra_principal: extra_principal_for(transaction),
-        range:           range,
-        schedule:        self,
+  def build_amortizer transaction, projection_range
+    Projector.with_banker_rounding do
+      MortgageAmortizer.new(
+        self,
+        projection_range,
+        extra_principal:  extra_principal_for(transaction),
       )
     end
-    yield :credit, result.interest,  payment_account
-    yield :credit, result.principal, payment_account
-    yield :debit,  result.interest,  interest_account
-    yield :debit,  result.principal, principal_account
-    return nil if result.balance.zero?
-    result.next_transaction transaction, next_schedule(result)
   end
 
   def final_month
@@ -314,8 +251,14 @@ class MortgageSchedule < CompoundSchedule
       extra_principal_amount(transaction, :credits)
   end
 
-  private
+  def yield_for_each_bit_on_amortizer amortizer
+    yield :credit, amortizer.interest,  payment_account
+    yield :credit, amortizer.principal, payment_account
+    yield :debit,  amortizer.interest,  interest_account
+    yield :debit,  amortizer.principal, principal_account
+  end
 
+  private
 
   def extra_principal_for transaction
     extra_principal_amount transaction, :debits

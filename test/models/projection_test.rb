@@ -351,8 +351,8 @@ class ProjectorCompoundInterestTest < ProjectionTest
 
     @projector.transactions = [{
       date: jul_1_2000,
-      credit:   [200000, :loan], #{ amount: 200000,         account: :loan },
-      debit:    [200000, :checking], #{ amount: 200000,         account: :checking },
+      credit:   [200000, :loan],
+      debit:    [200000, :checking],
     },{
       date: jul_1_2000,
       credit: [200000, :checking],
