@@ -359,9 +359,6 @@ class ProjectorCompoundInterestTest < ProjectionTest
       debit:  [200000, :investment],
     },{
       date: jul_1_2000,
-      credit:   { amount: :payment,       account: :checking },
-      debits:  [{ amount: :interest,      account: :loan_interest },
-                { amount: :principal,     account: :loan }],
       schedule: {
         accounts: {
           interest:  :loan_interest,
@@ -375,10 +372,12 @@ class ProjectorCompoundInterestTest < ProjectionTest
       },
     },{
       date: jul_1_2000,
-      debit:    { amount: :payment,   account: :investment },
-      credits: [{ amount: :principal, account: :investment },
-                { amount: :interest,  account: :investment_revenue }],
       schedule: {
+        accounts: {
+          interest:  :investment_revenue,
+          payment:   :investment,
+          principal: :investment,
+        },
         annual_interest: 6.000,
         initial_value:   200000,
         type:            :compound,
@@ -416,7 +415,7 @@ class ProjectorCompoundInterestTest < ProjectionTest
     transaction.debits.push( amount: 100, account: :loan)
 
     expected_balances = expected_dec_31_2000_balances
-    assert_equal_balances :loan, expected_balances.fetch(:loan) - 703.76, projection.account_balance(:loan)
+    assert_equal_balances :loan, expected_balances.fetch(:loan) - 603.76, projection.account_balance(:loan)
 
     # Extra principal payments must balance
     transaction.validate! @projector

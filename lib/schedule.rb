@@ -124,7 +124,7 @@ class RecurringSchedule < OneTimeSchedule
 end
 
 class CompoundSchedule < Schedule
-  attr :annual_interest, :initial_value
+  attr :account_map, :annual_interest, :initial_value
 
   class CompoundResult
     attr :balance, :end, :range
@@ -160,28 +160,6 @@ class CompoundSchedule < Schedule
     def payment
       interest + principal
     end
-
-    def yield_over_each_bit credits, debits, &block
-      decode_amount_key = {
-        interest:  interest,
-        principal: principal,
-        payment:   payment,
-      }
-      credits.each do |credit|
-        amount = credit.fetch :amount
-        unless amount.is_a? Numeric
-          amount = decode_amount_key.fetch amount
-        end
-        yield :credit, amount, credit.fetch(:account)
-      end
-      debits.each do |debit|
-        amount = debit.fetch :amount
-        unless amount.is_a? Numeric
-          amount = decode_amount_key.fetch amount
-        end
-        yield :debit, amount, debit.fetch(:account)
-      end
-    end
   end
 
   class MortgageResult < CompoundResult
@@ -195,6 +173,7 @@ class CompoundSchedule < Schedule
   def initialize date, params = {}
     @annual_interest = params.fetch :annual_interest
     @initial_value   = params.fetch :initial_value
+    @account_map     = params.fetch :accounts
     super date
   end
 
@@ -202,9 +181,24 @@ class CompoundSchedule < Schedule
     result = Projector.with_banker_rounding do
       amortize range
     end
-    result.yield_over_each_bit transaction.credits, transaction.debits, &block
+    yield :credit, result.interest, interest_account
+    yield :debit,  result.interest,  payment_account
+    yield :credit, result.principal, principal_account
+    yield :debit,  result.principal, payment_account
     return nil if result.balance.zero?
     result.next_transaction transaction, next_schedule(result)
+  end
+
+  def interest_account
+    account_map.fetch :interest
+  end
+
+  def payment_account
+    account_map.fetch :payment
+  end
+
+  def principal_account
+    account_map.fetch :principal
   end
 
   def monthly_payment
@@ -219,7 +213,7 @@ class CompoundSchedule < Schedule
   end
 
   def validate! transaction
-    if extra_principal_for? transaction
+    unless transaction.credits_and_debits.empty?
       raise Projector::InvalidTransaction, "You cannot supply extra debit or "\
         "credits on a compound interest schedule"
     end
@@ -238,28 +232,9 @@ class CompoundSchedule < Schedule
     )
   end
 
-  def extra_principal_for transaction
-    extra_principal_amount transaction, :debits
-  end
-
-  def extra_principal_for? transaction
-    extra_principal_amount(transaction, :debits) != 0 ||
-      extra_principal_amount(transaction, :credits) != 0
-  end
-
-  def extra_principal_amount transaction, credits_or_debits = :both
-    transaction.public_send(credits_or_debits).reduce 0 do |sum, bit|
-      amount = bit.fetch :amount
-      if amount.is_a? Numeric
-        sum + amount
-      else
-        sum
-      end
-    end
-  end
-
   def next_schedule result
     {
+      accounts:        account_map,
       annual_interest: annual_interest,
       initial_value:   result.balance,
       type:            type,
@@ -268,11 +243,10 @@ class CompoundSchedule < Schedule
 end
 
 class MortgageSchedule < CompoundSchedule
-  attr :account_map, :months
+  attr :months
 
   def initialize date, params = {}
-    @months      = params.fetch :months
-    @account_map = params.fetch :accounts
+    @months = params.fetch :months
     super date, params
   end
 
@@ -280,21 +254,16 @@ class MortgageSchedule < CompoundSchedule
     result = Projector.with_banker_rounding do
       amortize range, extra_principal_for(transaction)
     end
-    result.yield_over_each_bit transaction.credits, transaction.debits, &block
+    yield :credit, result.interest,  payment_account
+    yield :credit, result.principal, payment_account
+    yield :debit,  result.interest,  interest_account
+    yield :debit,  result.principal, liability_account
     return nil if result.balance.zero?
     result.next_transaction transaction, next_schedule(result)
   end
 
   def liability_account
-    account_map.fetch :principal
-  end
-
-  def interest_account
-    account_map.fetch :interest
-  end
-
-  def payment_account
-    account_map.fetch :payment
+    principal_account
   end
 
   def final_month
@@ -356,10 +325,29 @@ class MortgageSchedule < CompoundSchedule
     )
   end
 
+  def extra_principal_for transaction
+    extra_principal_amount transaction, :debits
+  end
+
+  def extra_principal_for? transaction
+    extra_principal_amount(transaction, :debits) != 0 ||
+      extra_principal_amount(transaction, :credits) != 0
+  end
+
+  def extra_principal_amount transaction, credits_or_debits = :both
+    transaction.public_send(credits_or_debits).reduce 0 do |sum, bit|
+      amount = bit.fetch :amount
+      if amount.is_a? Numeric
+        sum + amount
+      else
+        sum
+      end
+    end
+  end
+
   def next_schedule result
     super.tap do |hash|
-      hash[:months]   = months - result.months_amortized
-      hash[:accounts] = @account_map
+      hash[:months] = months - result.months_amortized
     end
   end
 end
