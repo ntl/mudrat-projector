@@ -72,10 +72,12 @@ class MortgageAmortizer < CompoundInterestAmortizer
   def amortize
     interest_paid  = 0
     principal_paid = 0
+    
+    mp = monthly_payment
 
     new_balance = months_amortized.times.inject initial_value do |balance, _|
       interest    = balance * rate
-      principal   = (monthly_payment - interest) + extra_principal
+      principal   = (mp - interest) + extra_principal
       interest_paid  += interest
       principal_paid += principal
       balance - principal
