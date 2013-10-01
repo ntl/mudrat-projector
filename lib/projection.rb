@@ -19,6 +19,10 @@ class Projection
       @balance = balance.send add_or_deduct(:debit), value
     end
 
+    def delta
+      balance - opening_balance
+    end
+
     private
 
     def add_or_deduct credit_or_debit
@@ -42,6 +46,10 @@ class Projection
     running_balances.fetch(account_id).balance
   end
 
+  def account_ids_for_type type
+    projector.accounts.select { |id, account| account.type == type }.map &:first
+  end
+
   def accounts
     projector.accounts.each_with_object Hash.new do |(id, account), hash|
       new_opening_balance = account_balance id
@@ -53,6 +61,10 @@ class Projection
         type:            account.type,
       )
     end
+  end
+
+  def delta account_id
+    running_balances.fetch(account_id).delta
   end
 
   def initial_net_worth
@@ -85,10 +97,6 @@ class Projection
   end
 
   private
-
-  def account_ids_for_type type
-    projector.accounts.select { |id, account| account.type == type }.map &:first
-  end
 
   def build_running_balances
     projector.accounts.each_with_object Hash.new do |(id, account), hash|

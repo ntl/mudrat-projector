@@ -5,30 +5,6 @@ class ProjectionTest < Minitest::Unit::TestCase
     @projector = Projector.new from: jan_1_2000
   end
 
-  def method_missing sym, *args, &block
-    return super if block_given? || args.size > 0
-    begin
-      Date.parse sym.to_s
-    rescue ArgumentError => ae
-      super
-    end
-  end
-
-  private
-
-  def epoch
-    jan_1_1970
-  end
-
-  def every_month _end = nil
-    {
-      end:    _end,
-      number: 1,
-      type:   :recurring,
-      unit:   :month,
-    }
-  end
-
   def projection
     @projector.project to: dec_31_2000
   end
