@@ -52,8 +52,12 @@ class TaxCalculator
     w2_gross = 0
 
     @projection = projector.project to: Date.new(year, 12, 31) do |account, amount|
-      if account.type == :revenue && account.tag?(:self_employed)
-        se_gross += amount
+      if account.type == :revenue
+        if account.tag? :self_employed
+          se_gross += amount
+        elsif account.tag? :w2
+          w2_gross += amount
+        end
       elsif account.type == :expense && account.tag?(:business)
         se_gross -= amount
       end
@@ -62,12 +66,7 @@ class TaxCalculator
     se_tax = se_gross * (1 - medicare_ss) * (medicare_ss * 2)
 
     gross = se_gross + w2_gross
-    agi = gross
-
-    agi -= se_tax / 2 # Deduction for half self employment tax paid
-    agi -= deduction  # Standard/itemized deduction
-    agi -= exemption  # Personal exemptions
-
+    agi = gross - ((se_tax / 2) + deduction + exemption)
     taxes = calculate_income_tax agi
     taxes += se_tax
 

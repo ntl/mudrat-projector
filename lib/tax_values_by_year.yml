@@ -2,7 +2,7 @@
   oasdi: 6.2
   hi: 1.45
   personal_exemption: 3_800
-  brackets_rates:
+  bracket_rates:
     - 10.0
     - 15.0
     - 25.0
