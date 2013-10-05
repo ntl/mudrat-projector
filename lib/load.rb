@@ -1,5 +1,6 @@
 require 'bigdecimal'
 require 'bigdecimal/util'
+require 'yaml'
 require_relative 'account'
 require_relative 'amortizer'
 require_relative 'date_diff'

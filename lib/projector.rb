@@ -93,10 +93,10 @@ class Projector
     end
   end
 
-  def project to: nil
+  def project to: nil, &block
     freeze
     must_be_balanced!
-    Projection.new(self, from: from, to: to).tap &:project
+    Projection.new(self, from: from, to: to, transaction_callback: block).tap &:project
   end
 
   def split_account parent_id, into: []

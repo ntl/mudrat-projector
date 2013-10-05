@@ -1,0 +1,94 @@
+2012:
+  oasdi: 6.2
+  hi: 1.45
+  personal_exemption: 3_800
+  brackets_rates:
+    - 10.0
+    - 15.0
+    - 25.0
+    - 28.0
+    - 33.0
+    - 35.0
+  married_filing_jointly:
+    standard_deduction: 11_900
+    brackets:
+      - 17_400
+      - 70_700
+      - 142_700
+      - 217_450
+      - 388_350
+  married_filing_separately:
+    standard_deduction: 5_950
+    brackets:
+      - 8_700
+      - 35_350
+      - 71_350
+      - 108_725
+      - 194_175
+  single:
+    standard_deduction: 5_950
+    brackets:
+      - 8_925
+      - 36_250
+      - 87_850
+      - 183_250
+      - 398_350
+      - 400_000
+  head_of_household:
+    standard_deduction: 8_700
+    brackets:
+      - 12_750
+      - 48_600
+      - 125_450
+      - 203_150
+      - 398_350
+      - 425_000
+
+2013:
+  oasdi: 6.2
+  hi: 1.45
+  personal_exemption: 3_900
+  bracket_rates:
+    - 10.0
+    - 15.0
+    - 25.0
+    - 28.0
+    - 33.0
+    - 35.0
+    - 39.6
+  married_filing_jointly:
+    standard_deduction: 12_200
+    brackets:
+      - 17_850
+      - 72_500
+      - 146_400
+      - 223_050
+      - 398_350
+      - 450_000
+  married_filing_separately:
+    standard_deduction: 6_100
+    brackets:
+      - 8_925
+      - 36_250
+      - 73_200
+      - 111_525
+      - 199_175
+      - 225_000
+  single:
+    standard_deduction: 6_100
+    brackets:
+      - 8_925
+      - 36_250
+      - 87_850
+      - 183_250
+      - 398_350
+      - 400_000
+  head_of_household:
+    standard_deduction: 8_950
+    brackets:
+      - 12_750
+      - 48_600
+      - 125_450
+      - 203_150
+      - 398_350
+      - 425_000

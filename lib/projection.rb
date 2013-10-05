@@ -1,6 +1,8 @@
 class Projection
-  attr :accounts, :from, :projector, :running_balances, :to, :transactions
-  private :running_balances
+  attr :accounts, :from, :projector, :to, :transactions
+
+  attr :running_balances, :transaction_callback
+  private :running_balances, :transaction_callback
 
   class AccountBalance
     attr :balance, :opening_balance, :type
@@ -34,20 +36,21 @@ class Projection
     end
   end
 
-  def initialize projector, from: nil, to: nil
+  def initialize projector, from: nil, to: nil, transaction_callback: nil
     @from             = from
     @projector        = projector
+    @running_balances = build_running_balances
     @to               = to
     @transactions     = []
-    @running_balances = build_running_balances
+    @transaction_callback = transaction_callback
   end
 
   def account_balance account_id
     running_balances.fetch(account_id).balance
   end
 
-  def account_ids_for_type type
-    projector.accounts.select { |id, account| account.type == type }.map &:first
+  def account_ids
+    running_balances.keys
   end
 
   def accounts
@@ -77,6 +80,7 @@ class Projection
       new_transaction = transaction.apply! self do |credit_or_debit, amount, account_id|
         to_account_and_parents account_id do |account|
           running_balances.fetch(account.id).send credit_or_debit, amount
+          transaction_callback.(account, amount) if transaction_callback
         end
       end
       transactions.push new_transaction if new_transaction
@@ -92,6 +96,7 @@ class Projection
     net_worth - initial_net_worth
   end
 
+
   def range
     (from..to)
   end
@@ -105,8 +110,12 @@ class Projection
   end
 
   def sum_balance_for_type balance_method, type
-    account_ids_for_type(type).inject 0 do |sum, id|
-      sum + running_balances.fetch(id).public_send(balance_method)
+    running_balances.inject 0 do |sum, (id, account_balance)|
+      if account_balance.type == type
+        sum + running_balances.fetch(id).public_send(balance_method)
+      else
+        sum
+      end
     end
   end
 

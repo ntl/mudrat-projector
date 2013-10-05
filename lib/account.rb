@@ -1,7 +1,7 @@
 class Account
   TYPES = %i(asset expense liability revenue equity)
 
-  attr :id, :name, :open_date, :opening_balance, :parent_id, :type
+  attr :id, :name, :open_date, :opening_balance, :parent_id, :tags, :type
 
   def initialize id, params = {}
     @id              = id
@@ -9,6 +9,7 @@ class Account
     @open_date       = params.fetch :open_date, Projector::ABSOLUTE_START
     @opening_balance = params.fetch :opening_balance, 0
     @parent_id       = params.fetch :parent_id, nil
+    @tags            = Array(params[:tags])
     @type            = params.fetch :type
   end
 
@@ -42,6 +43,10 @@ class Account
         type:      type,
       )
     end
+  end
+
+  def tag? tag
+    tags.include? tag
   end
 
   private

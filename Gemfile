@@ -8,3 +8,4 @@ gem 'simplecov', require: false
 gem 'pry', require: false
 
 require 'date'
+require 'yaml'
