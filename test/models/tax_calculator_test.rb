@@ -151,6 +151,10 @@ class TaxCalculatorShelleyTest < Minitest::Unit::TestCase
     assert_tax_calculation tax_calculation, gross: 120000, taxes: 21655
   end
 
+  def test_mortgage_interest_and_property_taxes
+    skip
+  end
+
   def test_alternative_minimum
     skip
   end
@@ -181,50 +185,5 @@ class TaxCalculatorShelleyTest < Minitest::Unit::TestCase
     assert_in_delta taxes,         tax_calculation.taxes,          1
     assert_in_delta expected_net,  tax_calculation.net,            1
     assert_in_delta expected_rate, tax_calculation.effective_rate, 0.01
-  end
-end
-
-
-__END__
-
-class TaxCalculatorTest < Minitest::Unit::TestCase
-  def setup
-    @projector = Projector.new from: jan_1_2012
-    @projector.accounts = {
-      checking:     { type: :asset,   opening_balance: 50000 },
-      biz_expenses: { type: :expense, tags: %i(business)},
-      job:          { type: :revenue, opening_balance: 50000, tags: %i(w2)},
-    }
-    @projector.transactions = [{
-      date:     jan_1_2012,
-      credit:   [4000, :job],
-      debit:    [4000, :checking],
-      schedule: every_month(dec_31_2012),
-    }]
-  end
-
-  def test_itemized_deductions_exceed_standard
-    skip
-  end
-
-  def test_married_household_with_salaried_income
-    household = TaxCalculator::Household.new :married_filing_jointly, 2
-    tax_calculator = TaxCalculator.new(
-      household: household,
-      projector: @projector,
-    )
-    tax_calculation = tax_calculator.project
-
-    assert_equal 48000, tax_calculation.gross
-    # FAIL: go do the calculation for this
-    assert_equal 10000, tax_calculation.taxes.round
-  end
-
-  def test_combination_of_self_employed_and_salaried_income
-    skip
-  end
-
-  def test_returns_projection_decorated_with_tax_withholdings
-    skip
   end
 end
