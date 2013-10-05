@@ -7,4 +7,8 @@ Rake::TestTask.new do |t|
   t.libs << 'test'
 end
 
+task :ctags do
+  `ctags -R --languages=Ruby --totals -f tags`
+end
+
 task default: :test
