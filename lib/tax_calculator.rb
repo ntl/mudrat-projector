@@ -103,21 +103,27 @@ class TaxCalculator
     hsa      = {}
     itemized = 0
 
-    @projection = projector.project to: Date.new(year, 12, 31) do |account, amount|
-      if account.tag? :self_employed
-        if account.type == :revenue
-          se_gross += amount
-        elsif account.type == :expense
-          se_gross -= amount
+    @projection = projector.project to: Date.new(year, 12, 31)
+    @projection.reduced_transactions.each do |transaction|
+      # FIXME: THIS BAD
+      pretax = transaction.credits.size == 1 && transaction.debits.size == 2
+      transaction.each_entry do |credit_or_debit, amount, account_id|
+        account = projector.accounts.fetch account_id
+        if account.tag? :self_employed
+          if account.type == :revenue
+            se_gross += amount
+          elsif account.type == :expense
+            se_gross -= amount
+          end
+        elsif account.tag?(:w2) && account.type == :revenue
+          w2_gross += amount
+        elsif account.tag?(:hsa) && account.type == :asset
+          cap = hsa_cap account
+          hsa[account.id] ||= { amount: 0, pretax: pretax }
+          hsa[account.id][:amount] = [hsa[account.id][:amount] + amount, cap].min
+        elsif account.tag?(:'501c') && account.type == :expense
+          itemized += amount
         end
-      elsif account.tag?(:w2) && account.type == :revenue
-        w2_gross += amount
-      elsif account.tag?(:hsa) && account.type == :asset
-        cap = hsa_cap account
-        hsa[account.id] ||= { amount: 0, pretax: account.tag?(:pretax) }
-        hsa[account.id][:amount] = [hsa[account.id][:amount] + amount, cap].min
-      elsif account.tag?(:'501c') && account.type == :expense
-        itemized += amount
       end
     end
 

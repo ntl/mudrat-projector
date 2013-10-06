@@ -17,6 +17,12 @@ class CompoundInterestAmortizer < Amortizer
     [balance, interest, 0]
   end
 
+  def each_entry &block
+    [[:credit, interest,  schedule.interest_account ],
+     [:credit, principal, schedule.principal_account],
+     [:debit,  payment,   schedule.payment_account  ]].each &block
+  end
+
   def initial_value
     schedule.initial_value
   end
@@ -67,6 +73,13 @@ class MortgageAmortizer < CompoundInterestAmortizer
 
   def monthly_payment
     schedule.monthly_payment
+  end
+
+  def each_entry &block
+    [[:credit, interest,  schedule.payment_account  ],
+     [:credit, principal, schedule.payment_account  ],
+     [:debit,  interest,  schedule.interest_account ],
+     [:debit,  principal, schedule.principal_account]].each &block
   end
 
   def amortize

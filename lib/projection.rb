@@ -1,8 +1,8 @@
 class Projection
-  attr :accounts, :from, :projector, :to, :transactions
+  attr :from, :projector, :to, :transactions, :reduced_transactions
 
-  attr :running_balances, :transaction_callback
-  private :running_balances, :transaction_callback
+  attr :running_balances
+  private :running_balances
 
   class AccountBalance
     attr :balance, :opening_balance, :type
@@ -36,13 +36,13 @@ class Projection
     end
   end
 
-  def initialize projector, from: nil, to: nil, transaction_callback: nil
-    @from             = from
-    @projector        = projector
-    @running_balances = build_running_balances
-    @to               = to
-    @transactions     = []
-    @transaction_callback = transaction_callback
+  def initialize projector, from: nil, to: nil
+    @from                 = from
+    @projector            = projector
+    @running_balances     = build_running_balances
+    @to                   = to
+    @transactions         = projector.transactions.dup
+    @reduced_transactions = []
   end
 
   def account_balance account_id
@@ -53,6 +53,7 @@ class Projection
     running_balances.keys
   end
 
+  # FIXME: make this go away
   def accounts
     projector.accounts.each_with_object Hash.new do |(id, account), hash|
       new_opening_balance = account_balance id
@@ -76,15 +77,23 @@ class Projection
   end
 
   def project
-    projector.transactions.each do |transaction|
-      new_transaction = transaction.apply! self do |credit_or_debit, amount, account_id|
-        to_account_and_parents account_id do |account|
-          running_balances.fetch(account.id).send credit_or_debit, amount
-          transaction_callback.(account, amount) if transaction_callback
-        end
+    reduce unless reduced?
+    reduced_transactions.each do |reduced_transaction|
+      reduced_transaction.each_entry do |credit_or_debit, amount, account_id|
+        handle_transaction_entry credit_or_debit, amount, account_id
       end
-      transactions.push new_transaction if new_transaction
     end
+  end
+
+  def reduce
+    reduced_transactions.clear
+    @transactions, @reduced_transactions = transactions.flat_map do |transaction|
+      transaction.reduce! self
+    end.partition { |transaction| transaction.after? to }
+  end
+
+  def reduced?
+    transactions.all? { |transaction| transaction.after? to }
   end
 
   def net_worth
@@ -106,6 +115,12 @@ class Projection
   def build_running_balances
     projector.accounts.each_with_object Hash.new do |(id, account), hash|
       hash[id] = AccountBalance.new account.opening_balance, account.type
+    end
+  end
+
+  def handle_transaction_entry credit_or_debit, amount, account_id
+    to_account_and_parents account_id do |account|
+      running_balances.fetch(account.id).send credit_or_debit, amount
     end
   end
 

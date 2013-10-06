@@ -154,6 +154,18 @@ class ProjectorSingleTransactionTest < ProjectionTest
     assert_equal 1000, projection.net_worth
   end
 
+  def test_single_transaction_with_split_on_both_sides
+    @projector.add_account :savings, type: :asset
+
+    assert_raises Projector::InvalidTransaction do
+      @projector.add_transaction(
+        date: jan_1_2000,
+        credits: [[540, :nustartup_inc], [ 460, :nustartup_inc]],
+        debits: [[500, :checking], [500, :savings]],
+      )
+    end
+  end
+
   def test_recurring_transaction_surrounding_the_projection_range
     @projector.add_transaction(
       date: jan_1_2000,
@@ -386,14 +398,20 @@ class ProjectorCompoundInterestTest < ProjectionTest
   end
 
   def test_extra_principal_each_month
+    # Without extra principal
+    expected_balances = expected_dec_31_2000_balances
+    assert_equal_balances :loan, expected_balances.fetch(:loan), projection.account_balance(:loan)
+
+    # With extra principal
     transaction = @projector.transactions.fetch 2
     transaction.credits.push(amount: 100, account: :checking)
     transaction.debits.push( amount: 100, account: :loan)
 
-    expected_balances = expected_dec_31_2000_balances
     assert_equal_balances :loan, expected_balances.fetch(:loan) - 603.76, projection.account_balance(:loan)
 
     # Extra principal payments must balance
+    transaction.credits.pop
+    transaction.debits.pop
     transaction.validate! @projector
     transaction.credits.push(amount: 100, account: :checking)
     transaction.debits.push( amount: 101, account: :loan)

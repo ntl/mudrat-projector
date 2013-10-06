@@ -14,6 +14,38 @@ class Schedule
     date > other_date
   end
 
+  def reduce transaction, range
+    return transaction if after? range.end
+    reducer = build_reducer transaction, range
+    reduced_transaction = reduce_transaction transaction, range, reducer
+    next_transaction = __build_next_transaction transaction, range, reducer
+    [next_transaction, reduced_transaction].compact
+  end
+
+  def reduce_transaction transaction, range, reducer
+    entries = {
+      credit: Hash.new { |h,k| h[k] = 0 },
+      debit:  Hash.new { |h,k| h[k] = 0 },
+    }
+
+    reducer.each_entry do |credit_or_debit, amount, account_id|
+      entries.fetch(credit_or_debit)[account_id] += amount
+    end
+
+    Transaction.new(
+      date: range.end,
+      credits: entries.fetch(:credit).to_a.map(&:reverse),
+      debits: entries.fetch(:debit).to_a.map(&:reverse),
+    )
+  end
+
+  def transaction_balanced? transaction
+    credit_amounts = transaction.credits.map &:first
+    debit_amounts  = transaction.debits.map  &:first
+    sum_of = ->(integers) { integers.inject(0) { |s,i| s + i } }
+    sum_of.(credit_amounts) == sum_of.(debit_amounts)
+  end
+
   def type
     self.class.to_s.split('::').last.tap do |classified|
       classified.chomp! 'Schedule'
@@ -27,45 +59,40 @@ class Schedule
       raise Projector::BalanceError, "Debits and credits do not balance"
     end
   end
+
+  private
+
+  def __build_next_transaction transaction, range, reducer
+    if method(:build_next_transaction).arity == 3
+      build_next_transaction transaction, range, reducer
+    else
+      build_next_transaction transaction, range
+    end
+  end
+
 end
 
 class OneTimeSchedule < Schedule
   def apply! transaction, range, &block
     yield_over_each_bit transaction.credits, transaction.debits, &block
-    nil
   end
 
-  def recurring?
-    false
-  end
-
-  def transaction_balanced? transaction
-    credits, debits = total_credits_and_debits transaction
-    credits == debits
-  end
-
-  private
-
-  def yield_over_each_bit credits, debits, multiplier = 1
-    credits.each do |amount, account_id|
-      yield :credit, amount * multiplier, account_id
-    end
-    debits.each do |amount, account_id|
-      yield :debit, amount * multiplier, account_id
-    end
-  end
-
-  def total_credits_and_debits transaction
-    credit_amounts = transaction.credits.map &:first
-    debit_amounts  = transaction.debits.map  &:first
-    sum_of = ->(integers) { integers.inject(0) { |s,i| s + i } }
-    [sum_of.call(credit_amounts), sum_of.call(debit_amounts)]
+  def reduce transaction, projection
+    transaction
   end
 end
 
-class RecurringSchedule < OneTimeSchedule
+class RecurringSchedule < Schedule
   attr :end, :number, :unit
-    
+
+  Multiplier = Struct.new :transaction, :factor do
+    def each_entry
+      transaction.each_entry do |credit_or_debit, amount, account_id|
+        yield credit_or_debit, amount * factor, account_id
+      end
+    end
+  end
+
   def initialize date, params = {}
     @end    = params[:end] || Projector::ABSOLUTE_END
     @number = params.fetch :number
@@ -73,22 +100,24 @@ class RecurringSchedule < OneTimeSchedule
     super date
   end
 
-  def after? other_date
-    date > other_date
+  def build_multiplier transaction, range
+    Multiplier.new transaction, calculate_multiplier_factor(range)
   end
+  alias_method :build_reducer, :build_multiplier
 
-  def apply! transaction, range, &block
-    yield_over_each_bit(
-      transaction.credits,
-      transaction.debits,
-      calculate_range_multiplier(range),
-      &block
+  def build_next_transaction transaction, range
+    Transaction.new(
+      date:     range.end + 1,
+      credits:  transaction.credits,
+      debits:   transaction.debits,
+      schedule: to_hash,
     )
-    remainder_transaction transaction, range
   end
 
-  def before? other_date
-    date < other_date
+  def calculate_multiplier_factor range
+    txn_start = [range.begin, date].max
+    txn_end   = [range.end, self.end].min
+    DateDiff.date_diff(unit: unit, from: txn_start, to: txn_end) * (1.0 / number)
   end
 
   def to_hash
@@ -98,28 +127,6 @@ class RecurringSchedule < OneTimeSchedule
       type:   :recurring,
       unit:   unit,
     }
-  end
-
-  def recurring?
-    true
-  end
-
-  private
-
-  def calculate_range_multiplier range
-    txn_start = [range.begin, date].max
-    txn_end   = [range.end, self.end].min
-    DateDiff.date_diff(unit: unit, from: txn_start, to: txn_end) * (1.0 / number)
-  end
-
-  def remainder_transaction transaction, range
-    return nil if self.end <= range.end
-    Transaction.new(
-      date:     range.end + 1,
-      credits:  transaction.credits,
-      debits:   transaction.debits,
-      schedule: to_hash,
-    )
   end
 end
 
@@ -133,17 +140,18 @@ class CompoundSchedule < Schedule
     super date
   end
 
-  def apply! transaction, projection_range, &block
-    amortizer = build_amortizer transaction, projection_range
-    yield_for_each_bit_on_amortizer amortizer, &block
-    return nil if amortizer.balance.zero?
-    amortizer.next_transaction transaction, next_schedule(amortizer)
-  end
-
-  def build_amortizer transaction, projection_range
+  def build_amortizer transaction, range
     Projector.with_banker_rounding do
-      CompoundInterestAmortizer.new self, projection_range
+      CompoundInterestAmortizer.new self, range
     end
+  end
+  alias_method :build_reducer, :build_amortizer
+
+  def build_next_transaction transaction, range, amortizer
+    amortizer.next_transaction(
+      transaction,
+      next_schedule(amortizer),
+    )
   end
 
   def interest_account
@@ -185,12 +193,6 @@ class CompoundSchedule < Schedule
         "credits on a compound interest schedule"
     end
   end
-
-  def yield_for_each_bit_on_amortizer amortizer
-    yield :credit, amortizer.interest,  interest_account
-    yield :credit, amortizer.principal, principal_account
-    yield :debit,  amortizer.payment,   payment_account
-  end
 end
 
 class MortgageSchedule < CompoundSchedule
@@ -201,13 +203,10 @@ class MortgageSchedule < CompoundSchedule
     super date, params
   end
 
-  def build_amortizer transaction, projection_range
+  def build_reducer transaction, range
     Projector.with_banker_rounding do
-      MortgageAmortizer.new(
-        self,
-        projection_range,
-        extra_principal:  extra_principal_for(transaction),
-      )
+      extra_principal = extra_principal_for transaction
+      MortgageAmortizer.new self, range, extra_principal: extra_principal
     end
   end
 
@@ -249,13 +248,6 @@ class MortgageSchedule < CompoundSchedule
   def transaction_balanced? transaction
     extra_principal_amount(transaction, :debits) ==
       extra_principal_amount(transaction, :credits)
-  end
-
-  def yield_for_each_bit_on_amortizer amortizer
-    yield :credit, amortizer.interest,  payment_account
-    yield :credit, amortizer.principal, payment_account
-    yield :debit,  amortizer.interest,  interest_account
-    yield :debit,  amortizer.principal, principal_account
   end
 
   private

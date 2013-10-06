@@ -11,13 +11,18 @@ class Transaction
     freeze
   end
 
-  def apply! projector, &block
-    validate! projector
-    if schedule.after? projector.range.end
-      self
-    else
-      schedule.apply! self, projector.range, &block
-    end
+  def reduce! projection
+    validate! projection
+    schedule.reduce self, projection.range
+  end
+
+  def after? date
+    schedule.after? date
+  end
+
+  def each_entry
+    credits.each { |entry| yield :credit, *entry }
+    debits.each { |entry| yield :debit, *entry }
   end
 
   def credits_and_debits
@@ -28,6 +33,12 @@ class Transaction
     if schedule.before? projector.from
       raise Projector::InvalidTransaction, "Transactions cannot occur before "\
         "projection start date. (#{projector.from} vs. #{schedule.date})"
+    end
+    if [credits, debits].none? { |e| e.size == 1 }
+      unless [credits, debits].all? { |e| e.empty? }
+        raise Projector::InvalidTransaction, "Transactions cannot split on "\
+          "both the credits and the debits"
+      end
     end
     schedule.validate! self
   end
