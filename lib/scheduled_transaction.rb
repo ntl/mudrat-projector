@@ -99,6 +99,14 @@ TransactionEntry = Struct.new :credit_debit, :amount, :account_id do
     freeze
   end
 
+  def apply_amount_to account_type: nil
+    if %i(asset expense).include? account_type
+      debit?  ? amount : -amount
+    else
+      credit? ? amount : -amount
+    end
+  end
+
   def credit?
     credit_debit == :credit
   end

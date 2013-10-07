@@ -15,16 +15,7 @@ class Account
   end
 
   def apply_transaction_entry! entry
-    @offset =
-      if %i(asset expense).include? type
-        entry.credit? ? (@offset - entry.amount) : (@offset + entry.amount)
-      else
-        entry.credit? ? (@offset + entry.amount) : (@offset - entry.amount)
-      end
-  end
-
-  def asset_or_expense?
-    %i(asset expense).include? type
+    @offset += entry.apply_amount_to account_type: type
   end
 
   def balance

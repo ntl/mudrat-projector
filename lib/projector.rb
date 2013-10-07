@@ -146,29 +146,3 @@ class Projector
   end
 
 end
-
-__END__
-
-  class << self
-    def new(existing_projection = nil, **params)
-      if existing_projection
-        import_projection projection: existing_projection
-      else
-        super params
-      end
-    end
-
-    private
-
-    def import_projection projection: projection
-      new(from: projection.to + 1).tap do |projector|
-        projector.accounts     = projection.accounts
-        projector.transactions = projection.transactions
-      end
-    end
-  end
-
-
-  private
-
-end
