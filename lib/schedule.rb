@@ -3,6 +3,62 @@ class Schedule
 
   def initialize date
     @date = date
+  end
+end
+
+class RecurringSchedule < Schedule
+  attr :number, :schedule_end, :unit
+
+  def initialize date, params = {}
+    @number        = params.fetch :number
+    @schedule_end  = params[:end] || Projector::ABSOLUTE_END
+    @unit          = params.fetch :unit
+    super date
+  end
+
+  def advance scheduled_transaction, over: nil
+    multiplier = calculate_multiplier_factor over
+    transaction = Transaction.new(
+      credits: multiply(scheduled_transaction.credits, by: multiplier),
+      debits:  multiply(scheduled_transaction.debits,  by: multiplier),
+      date:    over.end,
+    )
+    if schedule_end > over.end
+      next_transaction = ScheduledTransaction.new(
+        date:     (over.end + 1),
+        credits:  scheduled_transaction.credits,
+        debits:   scheduled_transaction.debits,
+        schedule: self,
+      )
+      [transaction, next_transaction]
+    else
+      transaction
+    end
+  end
+
+  def calculate_multiplier_factor projection_range
+    range_begin = projection_range.begin
+    range_end   = [projection_range.end, schedule_end].min
+    factor = DateDiff.date_diff unit: unit, from: range_begin, to: range_end
+    factor / number
+  end
+
+  def multiply entries, by: nil
+    entries.map do |entry|
+      TransactionEntry.new(
+        entry.credit_debit,
+        entry.amount * by,
+        entry.account_id,
+      )
+    end
+  end
+end
+
+__END__
+  attr :date
+
+  def initialize date
+    @date = date
     freeze
   end
 
@@ -112,12 +168,6 @@ class RecurringSchedule < Schedule
       debits:   transaction.debits,
       schedule: to_hash,
     )
-  end
-
-  def calculate_multiplier_factor range
-    txn_start = [range.begin, date].max
-    txn_end   = [range.end, self.end].min
-    DateDiff.date_diff(unit: unit, from: txn_start, to: txn_end) * (1.0 / number)
   end
 
   def to_hash

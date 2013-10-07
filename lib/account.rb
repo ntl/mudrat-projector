@@ -1,11 +1,12 @@
 class Account
   TYPES = %i(asset expense liability revenue equity)
 
-  attr :id, :name, :open_date, :opening_balance, :parent_id, :tags, :type
+  attr :name, :open_date, :opening_balance, :parent_id, :tags, :type
+  private :opening_balance
 
-  def initialize id, params = {}
-    @id              = id
-    @name            = params.fetch :name, default_account_name
+  def initialize params = {}
+    @name            = params.fetch :name
+    @offset          = 0
     @open_date       = params.fetch :open_date, Projector::ABSOLUTE_START
     @opening_balance = params.fetch :opening_balance, 0
     @parent_id       = params.fetch :parent_id, nil
@@ -13,46 +14,33 @@ class Account
     @type            = params.fetch :type
   end
 
+  def apply_transaction_entry! entry
+    @offset =
+      if %i(asset expense).include? type
+        entry.credit? ? (@offset - entry.amount) : (@offset + entry.amount)
+      else
+        entry.credit? ? (@offset + entry.amount) : (@offset - entry.amount)
+      end
+  end
+
   def asset_or_expense?
     %i(asset expense).include? type
   end
 
-  def validate! projector
-    existing_account = projector.accounts[id]
-    if existing_account
-      raise Projector::AccountExists, "Account `#{id}' exists; name is "\
-        "`#{existing_account.name}'"
-    end
-    unless TYPES.include? type
-      raise Projector::InvalidAccount, "Account `#{name}', does not have a "\
-        "type in #{TYPES.join(', ')}"
-    end
-    if opening_balance > 0 && open_date > projector.from
-      raise Projector::BalanceError, "Projection starts on #{projector.from}, "\
-        "and account `#{name}' starts on #{open_date} with a nonzero opening "\
-        "balance of #{opening_balance}"
-    end
+  def balance
+    opening_balance + @offset
   end
 
-  def split into: []
-    into.map do |child_id|
-      self.class.new(
-        child_id,
-        open_date: open_date,
-        parent_id: id,
-        type:      type,
-      )
-    end
+  def inspect
+    "#<#{self.class} name=#{name.inspect}, type=#{type.inspect}, balance=#{balance.round(2).to_f.inspect}>"
   end
 
   def tag? tag
     tags.include? tag
   end
 
-  private
-
-  def default_account_name
-    id.to_s.capitalize.gsub(/_[a-z]/) do |dash_letter|
+  def self.default_account_name account_id
+    account_id.to_s.capitalize.gsub(/_[a-z]/) do |dash_letter|
       dash_letter[1].upcase
     end
   end

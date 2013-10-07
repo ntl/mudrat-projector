@@ -1,5 +1,7 @@
 require 'test_helper'
 
+__END__
+
 class TaxCalculatorShelleyTest < Minitest::Unit::TestCase
   def setup
     @projector = Projector.new from: jan_1_2013
