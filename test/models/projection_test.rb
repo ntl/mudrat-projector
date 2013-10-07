@@ -48,7 +48,7 @@ class ProjectorAccountsTest < ProjectionTest
   end
 
   def test_adding_a_sub_account
-    parent = @projector.add_account(
+    @projector.add_account(
       :checking,
       open_date: jan_8_2000,
       type:      :asset,
@@ -251,13 +251,10 @@ class ProjectorRecurringTransactionTest < ProjectionTest
 
     results = run_projection dec_31_2000
     assert_equal 48000, net_worth(results)
-    assert_equal 1,     results.transactions.size
     results = results.project to: jun_30_2001
     assert_equal 72000, net_worth(results)
-    assert_equal 1,     results.transactions.size
     results = results.project to: dec_31_2001
     assert_equal 96000, net_worth(results)
-    assert_equal 0,     results.transactions.size
   end
 
   def test_recurring_transaction_starting_before_the_projection_range
@@ -290,6 +287,18 @@ class ProjectorRecurringTransactionTest < ProjectionTest
     )
     assert_equal 0, net_worth_at(dec_31_2000)
   end
+
+  def test_recurring_transaction_generates_one_transaction_per_interval
+    @projector.add_transaction(
+      date: jan_1_2000,
+      credit: [4000, :nustartup_inc],
+      debit:  [4000, :checking],
+      schedule: every_month(dec_31_2000),
+    )
+    results = run_projection dec_31_2000
+    assert_equal 12, results.transactions.size
+  end
+end
 
 class ProjectorSourcedFromProjectionTest < ProjectionTest
   def setup
@@ -350,15 +359,124 @@ class ProjectorSourcedFromProjectionTest < ProjectionTest
   end
 end
 
-end
-__END__
-class ProjectorCompoundInterestTest < ProjectionTest
+class ProjectorInvestmentTest < ProjectionTest
   def setup
     super
     @projector.accounts = {
-      checking:           { type: :asset,     },
-      investment:         { type: :asset,     open_date: jul_1_2000 },
-      investment_revenue: { type: :revenue,   open_date: jul_1_2000 },
+      checking:           { type: :asset    },
+      investment:         { type: :asset,
+                            open_date:        jul_1_2000,
+                            subtype:          :investment,
+                            annual_interest:  6.000,
+                            interest_revenue: :investment_revenue,
+                            principal:        :investment,
+                          },
+      investment_revenue: { type: :revenue, open_date: jul_1_2000 },
+    }
+  end
+
+  def test_that_investment_receives_compound_interest
+    @projector.add_transaction(
+      date: jul_1_2000,
+      credit: [200000, :checking],
+      debit:  [200000, :investment],
+    )
+    skip
+  end
+
+  def test_monthly_contributions
+    @projector.add_transaction(
+      date: jul_1_2000,
+      credit: [1000, :checking],
+      debit:  [1000, :investment],
+      schedule: every_month,
+    )
+    skip
+  end
+
+  def test_changing_monthly_contributions
+    @projector.add_transaction(
+      date: jul_1_2000,
+      credit: [1000, :checking],
+      debit:  [1000, :investment],
+      schedule: every_month(may_31_2001),
+    )
+    @projector.add_transaction(
+      date: jun_1_2001,
+      credit: [1200, :checking],
+      debit:  [1200, :investment],
+      schedule: every_month,
+    )
+    skip
+  end
+end
+
+class ProjectorSimpleLoanPayoffTest < ProjectionTest
+  def test_loan_payoff_on_schedule
+    skip
+  end
+
+  def test_loan_pays_off_faster_with_extra_principal
+    skip
+  end
+end
+
+class ProjectorDrainAccountTest < ProjectionTest
+  def test_putting_all_available_cash_into_an_investment
+    skip
+  end
+end
+
+class MortgageTest < ProjectionTest
+  def setup
+    skip
+    super
+
+    @projector.accounts = {
+      checking:          { type: :asset     },
+      mortgage:          { type: :liability },
+      mortgage_interest: { type: :expense   },
+    }
+
+    @projector.transactions = [{
+      date: jul_1_2000,
+      credit:   [200000, :loan],
+      debit:    [200000, :checking],
+    },{
+      date: jul_1_2000,
+      schedule: {
+        accounts: {
+          interest:  :loan_interest,
+          payment:   :checking,
+          principal: :loan,
+        },
+        annual_interest: 3.000,
+        months:          360,
+        type:            :mortgage,
+      },
+    }]
+  end
+
+  def test_30_year_mortgage
+    skip
+  end
+
+  def test_15_year_mortgage
+    skip
+  end
+
+  def test_30_year_mortgage_with_one_time_extra_payment
+    skip
+  end
+
+  def test_30_year_mortgage_with_extra_principal
+    skip
+  end
+end
+
+__END__
+
+    @projector.accounts = {
       loan:               { type: :liability, },
       loan_interest:      { type: :expense,   },
     }
@@ -398,7 +516,6 @@ class ProjectorCompoundInterestTest < ProjectionTest
       },
     }]
   end
-
   def test_borrow_at_three_lend_at_six_hit_the_course_nine
     p1 = projection
 
