@@ -47,6 +47,11 @@ class TransactionEntry
     validate!
   end
 
+  def * multiplier
+    return self if multiplier == 1
+    self.class.new serialize.merge(scalar: scalar * multiplier)
+  end
+
   def amount
     @amount
   end
@@ -61,6 +66,14 @@ class TransactionEntry
 
   def debit?
     @credit_or_debit == :debit
+  end
+
+  def serialize
+    {
+      account_id:       account_id,
+      scalar:           scalar,
+      credit_or_debit:  @credit_or_debit,
+    }
   end
 
   def validate!
@@ -83,5 +96,9 @@ class PercentageTransactionEntry < TransactionEntry
 
   def calculate_amount chart_of_accounts
     @amount = scalar * chart_of_accounts.fetch(other_account_id).balance
+  end
+
+  def serialize
+    super.tap do |hash| hash[:other_account_id] = other_account_id; end
   end
 end

@@ -7,6 +7,14 @@ class Schedule
     @unit   = params.fetch :unit
   end
 
+  def advance_over range
+    split_count_over(range).reduce range.begin do |date, factor|
+      @count -= factor if @count
+      yield [date, factor]
+      DateDiff.advance intervals: factor, unit: unit, from: date
+    end
+  end
+
   def finished?
     (count.nil? || count > 0) ? false : true
   end
@@ -27,12 +35,9 @@ class Schedule
   end
 
   def slice range, &block
-    date = range.begin
-    split_count_over(range).each do |factor|
-      @count -= factor if @count
-      yield date, factor if block_given?
-      date = DateDiff.advance intervals: factor, unit: unit, from: date
-    end
-    finished? ? nil : serialize
+    bits = []
+    advance_over range do |date, factor| bits.push [date, factor]; end
+    leftover = finished? ? nil : serialize
+    [bits, leftover]
   end
 end

@@ -1,76 +1,47 @@
 require 'test_helper'
 
 class ScheduledTransactionTest < Minitest::Unit::TestCase
-  def test_slice_does_not_return_leftover_if_ending_within_slice_date
-    @schedule = Schedule.new every_month until: dec_31_2000
-    leftover = @schedule.slice(jan_1_2000..dec_31_2000)
+  def setup
+    @chart = ChartOfAccounts.new
+    @chart.add_account :checking, type: :asset
+    @chart.add_account :job,      type: :revenue
+  end
+
+  def test_prorating
+    in_range, _ = scheduled_transaction.slice apr_15_2000
+    assert_equal [1000, 1000, 1000, 500], in_range.map { |t| t.credits.first.scalar }
+
+    in_range, _ = scheduled_transaction_with_percentage.slice apr_15_2000
+    assert_equal [0.25, 0.25, 0.25, 0.125], in_range.map { |t| t.credits.first.scalar }
+  end
+
+  def test_leftover
+    _, leftover = scheduled_transaction(apr_15_2000).slice apr_15_2000
     assert_nil leftover
+
+    _, leftover = scheduled_transaction(apr_16_2000).slice apr_15_2000
+    refute_nil leftover
+
+    assert_equal apr_16_2000, leftover.date
   end
 
-  def test_slice_returns_leftover_if_schedule_has_no_end
-    @schedule = Schedule.new every_month
-    leftover = @schedule.slice(jan_1_2000..dec_31_2000)
-    
-    expected_schedule = { scalar: 1, unit: :month }
-    assert_equal expected_schedule, leftover
+  private
+
+  def scheduled_transaction end_date = nil
+    ScheduledTransaction.new(
+      date: jan_1_2000,
+      debit:  { account_id: :checking, amount: 1000 },
+      credit: { account_id: :job,      amount: 1000 },
+      schedule: every_month(until: end_date),
+    )
   end
 
-  def test_slice_returns_leftover_if_ending_after_slice_date
-    @schedule = Schedule.new every_month until: jun_30_2001
-    leftover = @schedule.slice(jan_1_2000..dec_31_2000)
-    
-    expected_schedule = { scalar: 1, unit: :month, count: 6 }
-    assert_equal expected_schedule, leftover
-  end
-
-  def test_slice_yields_advancing_dates
-    @schedule = Schedule.new every_month until: apr_15_2000
-
-    actual_dates   = []
-    expected_dates = [jan_1_2000, feb_1_2000, mar_1_2000, apr_1_2000]
-    @schedule.slice(jan_1_2000..apr_15_2000) do |date, _|
-      actual_dates.push date
-    end
-
-    assert_equal expected_dates, actual_dates
-  end
-
-  def test_slice_prorates_final_period
-    @schedule = Schedule.new every_month until: apr_15_2000
-
-    expected_prorates = [1, 1, 1, 0.5]
-    actual_prorates = []
-    @schedule.slice(jan_1_2000..dec_31_2000) do |_, prorate|
-      actual_prorates.push prorate
-    end
-
-    assert_equal expected_prorates, actual_prorates
-  end
-
-  def test_handles_start_after_projection
-    @schedule = Schedule.new every_month(from: apr_1_2000, until: jun_15_2000)
-
-    expected_prorates = [1, 1, 0.5]
-    actual_prorates = []
-    @schedule.slice(apr_1_2000..jun_15_2000) do |_, prorate|
-      actual_prorates.push prorate
-    end
-
-    assert_equal expected_prorates, actual_prorates
-  end
-
-  def test_handles_start_during_range_and_end_after_range
-    @schedule = Schedule.new every_month(from: jun_16_2000, until: apr_15_2001)
-
-    expected_prorates = [1, 1, 1, 1, 1, 0.5 ]
-    expected_leftover = { scalar: 1, unit: :month, count: 4.5 }
-
-    actual_prorates = []
-    actual_leftover = @schedule.slice(jun_16_2000..nov_30_2000) do |_, prorate|
-      actual_prorates.push prorate
-    end
-
-    assert_equal expected_prorates, actual_prorates
-    assert_equal expected_leftover, actual_leftover
+  def scheduled_transaction_with_percentage
+    ScheduledTransaction.new(
+      date: jan_1_2000,
+      debit:  { account_id: :checking, percent: 0.25, of: :job },
+      credit: { account_id: :job,      percent: 0.25, of: :job },
+      schedule: every_month,
+    )
   end
 end
