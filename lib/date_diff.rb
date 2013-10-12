@@ -38,7 +38,7 @@ module DateDiff
     end
     
     def self.advance intervals, from: from
-      from + intervals
+      from + intervals.round
     end
   end
 
@@ -155,10 +155,13 @@ module DateDiff
     end
 
     def self.advance intervals, from: from
-      # FIXME
-      return from if intervals < 1
-      # /FIXME
-      intervals.times.inject from do |date, _| date.next_month; end
+      if intervals < 1
+        days_in_month = Date.new(from.year, from.month, -1).day
+        days = intervals * days_in_month
+        DayCalculator.advance days, from: from
+      else
+        intervals.times.inject from do |date, _| date.next_month; end
+      end
     end
   end
 
