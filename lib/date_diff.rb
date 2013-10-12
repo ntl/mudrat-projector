@@ -155,6 +155,9 @@ module DateDiff
     end
 
     def self.advance intervals, from: from
+      # FIXME
+      return from if intervals < 1
+      # /FIXME
       intervals.times.inject from do |date, _| date.next_month; end
     end
   end

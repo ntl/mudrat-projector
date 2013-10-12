@@ -8,7 +8,7 @@ class ScheduledTransaction < Transaction
 
   def slice slice_date
     txns_before_date = []
-    next_schedule = schedule.each_occurrence(date..slice_date) do |date, prorate|
+    next_schedule = schedule.slice(date..slice_date) do |date, prorate|
       txns_before_date << Transaction.new(
         date: date,
         debits: debits,
