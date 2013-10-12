@@ -18,6 +18,13 @@ class Binding
   end
 end
 
+# Dates need friendlier output
+class Date
+  def inspect
+    strftime
+  end
+end
+
 load File.expand_path('../../lib/load.rb', __FILE__)
 
 MiniTest::Reporters.use! MiniTest::Reporters::DefaultReporter.new
@@ -39,12 +46,14 @@ MiniTest::Unit::TestCase.class_eval do
     jan_1_1970
   end
 
-  def every_month _end = nil
-    {
-      end:    _end,
-      number: 1,
-      type:   :recurring,
-      unit:   :month,
-    }
+  def every_month **params
+    end_date = params[:until]
+    if end_date
+      from = params[:from] || jan_1_2000
+      count = DateDiff.date_diff unit: :month, from: from, to: end_date
+      { unit: :month, scalar: 1, count: count }
+    else
+      { unit: :month, scalar: 1 }
+    end
   end
 end

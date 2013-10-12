@@ -1,64 +1,81 @@
 class Transaction
-  attr :credits, :debits, :schedule
+  include Enumerable
+
+  attr :credits, :date, :debits
 
   def initialize params = {}
-    date = params.fetch :date
-    @credits = Array params[:credits]
-    @debits  = Array params[:debits]
-    @credits << params[:credit] if params[:credit]
-    @debits  << params[:debit]  if params[:debit]
-    @schedule = build_schedule date, params[:schedule]
-    freeze
+    @date        = params.fetch :date
+    self.credits = extract_entry_params :credit, params
+    self.debits  = extract_entry_params :debit,  params
+    validate!
   end
 
-  def reduce! projection
-    validate! projection
-    schedule.reduce self, projection.range
+  def balanced?
+    sum_credits = build_set_for_balance credits
+    sum_debits  = build_set_for_balance debits
+    (sum_credits ^ sum_debits).empty?
   end
 
-  def after? date
-    schedule.after? date
+  def credits= credits
+    @credits = build_entries :credit, credits
   end
 
-  def each_entry
-    credits.each { |entry| yield :credit, *entry }
-    debits.each { |entry| yield :debit, *entry }
+  def debits= debits
+    @debits = build_entries :debit, debits
   end
 
-  def credits_and_debits
-    credits + debits
+  def each &block
+    credits.each &block
+    debits.each &block
   end
 
-  def validate! projector
-    if schedule.before? projector.from
-      raise Projector::InvalidTransaction, "Transactions cannot occur before "\
-        "projection start date. (#{projector.from} vs. #{schedule.date})"
+  def slice slice_date
+    if date > slice_date
+      [[], self]
+    else
+      [[self], nil]
     end
-    if [credits, debits].none? { |e| e.size == 1 }
-      unless [credits, debits].all? { |e| e.empty? }
-        raise Projector::InvalidTransaction, "Transactions cannot split on "\
-          "both the credits and the debits"
-      end
-    end
-    schedule.validate! self
   end
 
   private
 
-  def build_schedule date, params = {}
-    if params.nil?
-      OneTimeSchedule.new date
-    else
-      fetch_schedule_klass(params.fetch(:type)).new date, params
+  def extract_entry_params credit_or_debit, params
+    entries = Array params["#{credit_or_debit}s".to_sym]
+    return entries unless params.has_key? credit_or_debit
+    unless entries.empty?
+      raise ArgumentError, "You cannot supply both #{credit_or_debit} and "\
+        "#{credit_or_debit}s"
+    end
+    [params.fetch(credit_or_debit)]
+  end
+
+  def build_entries credit_or_debit, entries
+    entries.map do |entry_params|
+      if entry_params.is_a? TransactionEntry
+        entry_params
+      else
+        TransactionEntry.public_send "new_#{credit_or_debit}", entry_params
+      end
     end
   end
 
-  def fetch_schedule_klass type
-    classified_type = type.to_s
-    classified_type.insert 0, '_'
-    classified_type.gsub!(%r{_[a-z]}) { |match| match[1].upcase }
-    classified_type.concat 'Schedule'
-    self.class.const_get classified_type
+  def build_set_for_balance entries
+    hash = Hash.new { |h,k| h[k] = 0 }
+    entries.each do |entry|
+      balance_key = entry.class == TransactionEntry ? :fixed : entry.other_account_id
+      hash[balance_key] += entry.scalar
+    end
+    hash.reduce Set.new do |set, (_, value)| set << value; end
   end
 
+  def validate!
+    if credits.empty? || debits.empty?
+      raise Projector::InvalidTransaction, "Credits and debits both must have "\
+        "entries"
+    end
+    unless balanced?
+      raise Projector::InvalidTransaction, "Credits and debit entries both "\
+        "must be supplied; they cannot amount to zero"
+    end
+  end
 end

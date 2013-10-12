@@ -1,6 +1,10 @@
 module DateDiff
   extend self
 
+  def advance intervals: nil, unit: nil, from: nil
+    fetch_subclass(unit).advance intervals, from: from
+  end
+
   def date_diff *maybe_unit_from_to, unit: nil, from: nil, to: nil
     if [unit, from, to].all? &:nil?
       unit, from, to = maybe_unit_from_to
@@ -32,11 +36,19 @@ module DateDiff
     def calculate
       days_between
     end
+    
+    def self.advance intervals, from: from
+      from + intervals
+    end
   end
 
   class WeekCalculator < DayCalculator
     def calculate
       super / 7.0
+    end
+
+    def self.advance intervals, from: from
+      from + (intervals * 7)
     end
   end
 
@@ -98,6 +110,10 @@ module DateDiff
     def rewind_one_unit date
       date.prev_year
     end
+
+    def self.advance intervals, from: from
+      Date.new(from.year + intervals, from.month, from.day)
+    end
   end
 
   class QuarterCalculator < ComplexCalculator
@@ -118,6 +134,10 @@ module DateDiff
     def rewind_one_unit date
       date.prev_month.prev_month.prev_month
     end
+
+    def self.advance intervals, from: from
+      (intervals * 3).times.inject from do |date, _| date.next_month; end
+    end
   end
 
   class MonthCalculator < ComplexCalculator
@@ -132,6 +152,10 @@ module DateDiff
 
     def rewind_one_unit date
       date.prev_month
+    end
+
+    def self.advance intervals, from: from
+      intervals.times.inject from do |date, _| date.next_month; end
     end
   end
 

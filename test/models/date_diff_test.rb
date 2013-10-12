@@ -88,9 +88,38 @@ class DateDiffTest < MiniTest::Unit::TestCase
     assert_equal (2/31.0 + 12.0 + 2/31.0), date_diff(:month, @dec_30_2000, Date.new(2002, 1, 2))
   end
 
+  def test_advancing_days
+    assert_equal Date.new(2000, 1, 2), advance(from: @jan_1_2000, unit: :day, intervals: 1)
+    assert_equal Date.new(2000, 1, 3), advance(from: @jan_1_2000, unit: :day, intervals: 2)
+  end
+
+  def test_advancing_weeks
+    assert_equal Date.new(2000, 1, 8),  advance(from: @jan_1_2000, unit: :week, intervals: 1)
+    assert_equal Date.new(2000, 1, 15), advance(from: @jan_1_2000, unit: :week, intervals: 2)
+  end
+
+  def test_advancing_months
+    assert_equal Date.new(2000, 2, 1), advance(from: @jan_1_2000, unit: :month, intervals: 1)
+    assert_equal Date.new(2000, 3, 1), advance(from: @jan_1_2000, unit: :month, intervals: 2)
+  end
+
+  def test_advancing_quarters
+    assert_equal Date.new(2000, 4, 1), advance(from: @jan_1_2000, unit: :quarter, intervals: 1)
+    assert_equal Date.new(2000, 7, 1), advance(from: @jan_1_2000, unit: :quarter, intervals: 2)
+  end
+
+  def test_advancing_years
+    assert_equal Date.new(2001, 1, 1), advance(from: @jan_1_2000, unit: :year, intervals: 1)
+    assert_equal Date.new(2002, 1, 1), advance(from: @jan_1_2000, unit: :year, intervals: 2)
+  end
+
   private
 
   def date_diff *args
     DateDiff.date_diff *args
+  end
+
+  def advance *args
+    DateDiff.advance *args
   end
 end

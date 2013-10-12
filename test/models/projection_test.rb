@@ -2,13 +2,85 @@ require 'test_helper'
 
 class ProjectionTest < Minitest::Unit::TestCase
   def setup
+    @chart = ChartOfAccounts.new.tap do |c|
+      c.add_account :checking, type: :asset
+      c.add_account :job, type: :revenue
+    end
+    @projection = Projection.new range: (jan_1_2000..dec_31_2000), chart: @chart
+  end
+
+  def test_cannot_add_transaction_outside_of_range
+    assert_raises Projector::InvalidTransaction do
+      @projection << valid_transaction(date: dec_31_1999)
+    end
+    assert_raises Projector::InvalidTransaction do
+      @projection << valid_transaction(date: jan_1_2001)
+    end
+  end
+
+  def test_adding_transaction
+    @projection << valid_transaction
+    assert_equal 1, @projection.transaction_sequence.size
+  end
+
+  def test_adding_transactions_out_of_order
+    @projection << (first  = valid_transaction(date: jan_3_2000))
+    @projection << (second = valid_transaction(date: jan_2_2000))
+    @projection << (third  = valid_transaction(date: jan_2_2000))
+    @projection << (fourth = valid_transaction(date: jan_1_2000))
+
+    assert_equal [fourth, second, third, first].map(&:date),
+      @projection.transaction_sequence.map(&:date)
+  end
+
+  def test_project_freezes_projection_and_plays_transactions_through_chart
+    add_valid_transactions
+    assert_equal 0, @chart.net_worth
+
+    @projection.project!
+    assert @projection.frozen?
+
+    assert_equal 3032, @chart.net_worth
+  end
+
+  def test_project_will_yield_to_block
+    add_valid_transactions
+
+    dates = []
+    @projection.project! { |t| dates << t.date }
+
+    assert_equal [jan_1_2000, feb_2_2000, mar_3_2000, apr_4_2000], dates
+  end
+
+  private
+
+  def add_valid_transactions
+    @projection << valid_transaction(date: jan_1_2000)
+    @projection << valid_transaction(date: feb_2_2000, amount: 32)
+    @projection << valid_transaction(date: mar_3_2000)
+    @projection << valid_transaction(date: apr_4_2000)
+  end
+
+  def valid_transaction date: jan_1_2000, amount: 1000
+    Transaction.new(
+      date: date,
+      debit:  { amount: amount, account_id: :checking },
+      credit: { amount: amount, account_id: :job      },
+    )
+  end
+end
+
+__END__
+
+class ProjectionTest < Minitest::Unit::TestCase
+  def setup
     @projector = Projector.new from: jan_1_2000
   end
 
   private
 
-  def run_projection date
-    @projector.project to: date
+  def run_projection date, &block
+    @projector.project to: date, &block
   end
 
   def net_worth projection
@@ -241,6 +313,18 @@ class ProjectorRecurringTransactionTest < ProjectionTest
     assert_equal 0,     results.transactions.size
   end
 
+  def test_recurring_transaction_with_prorated_end
+    @projector.add_transaction(
+      date: jan_1_2000,
+      credit: [4000, :nustartup_inc],
+      debit:  [4000, :checking],
+      schedule: every_month(apr_15_2000),
+    )
+    results = run_projection dec_31_2000
+    assert_equal 14000, net_worth(results)
+    assert_equal 0,    results.transactions.size
+  end
+
   def test_recurring_transaction_ending_after_projection
     @projector.add_transaction(
       date: jan_1_2000,
@@ -288,15 +372,55 @@ class ProjectorRecurringTransactionTest < ProjectionTest
     assert_equal 0, net_worth_at(dec_31_2000)
   end
 
-  def test_recurring_transaction_generates_one_transaction_per_interval
+  def test_recurring_transactions_are_processed_in_chronological_order
     @projector.add_transaction(
       date: jan_1_2000,
       credit: [4000, :nustartup_inc],
       debit:  [4000, :checking],
-      schedule: every_month(dec_31_2000),
+      schedule: every_month(mar_31_2000),
+    )
+    @projector.add_transaction(
+      date: jan_15_2000,
+      credit: [400, :nustartup_inc],
+      debit:  [400, :checking],
+      schedule: every_month(mar_14_2000),
+    )
+    transaction_dates = []
+    run_projection dec_31_2000 do |t| transaction_dates.push t.date; end
+    assert_equal [jan_1_2000, jan_15_2000, feb_1_2000, feb_15_2000, mar_1_2000],
+      transaction_dates
+  end
+
+  def test_recurring_transaction_with_percentages
+    @projector.accounts.fetch(:checking).instance_variable_set :@opening_balance, 5000
+    @projector.accounts.fetch(:nustartup_inc).instance_variable_set :@opening_balance, 5000
+    @projector.add_transaction(
+      date:   jan_1_2000,
+      credit: [{percent: 20.0, of: :nustartup_inc}, :nustartup_inc],
+      debit:  [{percent: 20.0, of: :nustartup_inc}, :checking],
+      schedule: every_month(feb_29_2000),
+    )
+
+    results = run_projection feb_29_2000
+    assert_equal 7200, net_worth(results)
+    assert_equal 7200, results.account_balance(:checking)
+    assert_equal 7200, results.account_balance(:nustartup_inc)
+  end
+
+  def test_recurring_transaction_with_remainder
+    @projector.add_account :hsa, type: :asset
+    @projector.add_transaction(
+      date:   jan_1_2000,
+      credit: [4000, :nustartup_inc],
+      debits: [[3800, :checking],
+               [:remainder, :hsa]],
+      schedule: every_month,
     )
     results = run_projection dec_31_2000
-    assert_equal 12, results.transactions.size
+    assert_equal 48000, net_worth(results)
+    assert_equal 45600, results.account_balance(:checking)
+    assert_equal 48000, results.account_balance(:nustartup_inc)
+    assert_equal 2400,  results.account_balance(:hsa)
   end
 end
 

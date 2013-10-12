@@ -1,37 +1,33 @@
 class Projection
-  attr :range, :projector
+  attr :range
 
-  def initialize source_projector, range: nil, next_projector: nil
-    @source_projector = source_projector
-    @projector        = next_projector
-    @range            = range
+  def initialize range: date_range, chart: chart_of_accounts
+    @chart                = chart
+    @range                = range
+    @transaction_sequence = []
+  end
+
+  def << transaction
+    validate_transaction! transaction
+    @transaction_sequence.push transaction
   end
 
   def project!
-    @source_projector.transactions.each do |transaction|
-      if transaction.after? range.end
-        projector.add_transaction transaction
-
-      elsif transaction.scheduled?
-        next_transaction = transaction.advance(until: range.end) do |entry|
-          handle_entry entry
-        end
-        projector.add_transaction next_transaction if next_transaction
-
-      else
-        transaction.each_entry do |entry|
-          handle_entry entry
-        end
-
-      end
+    freeze
+    transaction_sequence.each do |transaction|
+      @chart.apply_transaction transaction
+      yield transaction if block_given?
     end
   end
 
-  def handle_entry entry
-    account = projector.accounts.fetch entry.account_id
-    while account
-      account.apply_transaction_entry! entry
-      account = projector.accounts[account.parent_id]
+  def transaction_sequence
+    @transaction_sequence.sort do |a,b| a.date <=> b.date; end
+  end
+
+  def validate_transaction! transaction
+    unless range.include? transaction.date
+      raise Projector::InvalidTransaction, "Transaction date "\
+        "#{transaction.date} falls outside of range #{range.inspect}"
     end
   end
 end

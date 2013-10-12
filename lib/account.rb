@@ -1,38 +1,74 @@
 class Account
   TYPES = %i(asset expense liability revenue equity)
 
-  attr :name, :open_date, :opening_balance, :parent_id, :tags, :type
-  private :opening_balance
+  attr :open_date, :parent_id, :tags, :type
 
   def initialize params = {}
-    @name            = params.fetch :name
+    @entries         = []
+    @open_date       = params[:open_date] || Projector::ABSOLUTE_START
     @offset          = 0
-    @open_date       = params.fetch :open_date, Projector::ABSOLUTE_START
-    @opening_balance = params.fetch :opening_balance, 0
-    @parent_id       = params.fetch :parent_id, nil
-    @tags            = Array(params[:tags])
+    @opening_balance = params[:opening_balance] || 0
+    @parent_id       = params[:parent_id] || nil
+    @tags            = params[:tags] || []
     @type            = params.fetch :type
   end
 
-  def apply_transaction_entry! entry
-    @offset += entry.apply_amount_to account_type: type
+  def add_entry entry
+    @entries.push entry
+    check = %i(asset expense).include?(type) ? :debit? : :credit?
+    @offset += entry.public_send(check) ? entry.amount : -entry.amount
   end
 
   def balance
-    opening_balance + @offset
+    @opening_balance + @offset
   end
 
-  def inspect
-    "#<#{self.class} name=#{name.inspect}, type=#{type.inspect}, balance=#{balance.round(2).to_f.inspect}>"
+  def close!
+    freeze
+    return self if closed?
+    self.class.new serialize
   end
 
-  def tag? tag
-    tags.include? tag
+  def closed?
+    @entries.empty?
   end
 
-  def self.default_account_name account_id
-    account_id.to_s.capitalize.gsub(/_[a-z]/) do |dash_letter|
-      dash_letter[1].upcase
+  def create_child params = {}
+    new_params = serialize
+    new_params.merge!(
+      opening_balance: params[:opening_balance],
+      parent_id: params.fetch(:parent_id),
+      tags: (tags | Array(params[:tags])),
+    )
+    self.class.new new_params
+  end
+
+  def parent?
+    parent_id.nil? ? false : true
+  end
+
+  def tag? tag_name
+    tags.include? tag_name
+  end
+
+  def serialize
+    hash = { opening_balance: balance }
+    %i(open_date parent_id tags type).each do |attr|
+      value = public_send attr
+      unless default_value? attr, value
+        hash[attr] = value unless Array(value).empty?
+      end
+    end
+    hash
+  end
+
+  private
+
+  def default_value? attr, value
+    if attr == :open_date
+      value == Projector::ABSOLUTE_START
+    else
+      false
     end
   end
 end

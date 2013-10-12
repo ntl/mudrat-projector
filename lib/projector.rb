@@ -2,10 +2,16 @@ class Projector
   ABSOLUTE_START = Date.new 1970, 1, 1
   ABSOLUTE_END   = Date.new 9999, 1, 1
 
+  AccountDoesNotExist = Class.new StandardError
+  InvalidTransaction = Class.new StandardError
+end
+
+__END__
+
   AccountExists = Class.new ArgumentError
   BalanceError = Class.new ArgumentError
   InvalidAccount = Class.new ArgumentError
-  InvalidTransaction = Class.new ArgumentError
+  UnreducedEntry = Class.new ArgumentError
 
   attr :accounts, :from, :transactions
 
@@ -82,12 +88,12 @@ class Projector
     check_balance!
     next_projector = self.class.new from: (to + 1)
     next_projector.accounts = accounts
-    projector = Projection.new(
+    projection = Projection.new(
       self, 
       range: (from..to),
       next_projector: next_projector
     )
-    projector.project! &block
+    projection.project! &block
     next_projector
   end
 
