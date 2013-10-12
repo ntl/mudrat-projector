@@ -2,6 +2,7 @@ require 'bigdecimal'
 require 'bigdecimal/util'
 require 'yaml'
 require_relative 'date_diff'
+require_relative 'banker_rounding'
 require_relative 'projector'
 
 require_relative 'account'

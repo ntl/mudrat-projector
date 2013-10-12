@@ -137,6 +137,36 @@ class ChartOfAccountsTest < Minitest::Unit::TestCase
     assert_equal expected_hash, @chart.serialize
   end
 
+  def test_account_balance_with_splits
+    @chart.add_account :my_bank, type: :asset
+    @chart.add_account :job, type: :revenue
+    @chart.split_account :my_bank, into: %i(checking savings)
+    @chart.split_account :checking, into: %i(checking_1 checking_2)
+
+    @chart.apply_transaction Transaction.new(
+      date: jan_1_2000,
+      debit:  { amount: 1, account_id: :my_bank, credit_or_debit: :debit },
+      credit: { amount: 1, account_id: :job, credit_or_debit: :credit },
+    )
+    @chart.apply_transaction Transaction.new(
+      date: jan_1_2000,
+      debit:  { amount: 5, account_id: :checking, credit_or_debit: :debit },
+      credit: { amount: 5, account_id: :job, credit_or_debit: :credit },
+    )
+    @chart.apply_transaction Transaction.new(
+      date: jan_1_2000,
+      debit:  { amount: 12, account_id: :checking_1, credit_or_debit: :debit },
+      credit: { amount: 12, account_id: :job, credit_or_debit: :credit },
+    )
+
+    assert_equal 12, @chart.account_balance(:checking_1)
+    assert_equal 0,  @chart.account_balance(:checking_2)
+    assert_equal 18, @chart.account_balance(:job)
+    assert_equal 17, @chart.account_balance(:checking)
+    assert_equal 0,  @chart.account_balance(:savings)
+    assert_equal 18, @chart.account_balance(:my_bank)
+  end
+
   private
 
   def add_smattering_of_accounts

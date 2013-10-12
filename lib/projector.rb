@@ -1,153 +1,101 @@
 class Projector
+  extend Forwardable
+  extend BankerRounding
+
   ABSOLUTE_START = Date.new 1970, 1, 1
   ABSOLUTE_END   = Date.new 9999, 1, 1
 
   AccountDoesNotExist = Class.new StandardError
-  InvalidTransaction = Class.new StandardError
-end
+  AccountExists       = Class.new ArgumentError
+  BalanceError        = Class.new StandardError
+  InvalidAccount      = Class.new ArgumentError
+  InvalidTransaction  = Class.new StandardError
 
-__END__
+  attr :from
 
-  AccountExists = Class.new ArgumentError
-  BalanceError = Class.new ArgumentError
-  InvalidAccount = Class.new ArgumentError
-  UnreducedEntry = Class.new ArgumentError
-
-  attr :accounts, :from, :transactions
-
-  class << self
-    def with_banker_rounding
-      old_rounding_mode = BigDecimal.mode BigDecimal::ROUND_MODE
-      BigDecimal.mode BigDecimal::ROUND_MODE, BigDecimal::ROUND_HALF_EVEN
-      yield
-    ensure
-      BigDecimal.mode BigDecimal::ROUND_MODE, old_rounding_mode
-    end
-  end
-
-  def initialize from: ABSOLUTE_START
-    @from = from
-    @accounts = {} 
+  def initialize params = {}
+    @chart        = params.fetch :chart, ChartOfAccounts.new
+    @from         = params.fetch :from, ABSOLUTE_START
     @transactions = []
   end
 
-  def accounts= accounts_hash
-    accounts.clear
-    accounts_hash.each { |id, hash| add_account id, hash }
-  end
+  def_delegators :@chart, *%i(accounts account_balance balance fetch net_worth split_account)
 
-  def account_balance account_id
-    accounts.fetch(account_id).balance
-  end
-
-  def account_balances type
-    accounts.reduce 0 do |sum, (_, account)|
-      sum + (account.type == type ? account.balance : 0)
+  def accounts= accounts
+    accounts.each do |account_id, params|
+      add_account account_id, params
     end
   end
 
-  def add_account account_id, account_or_hash
-    account = build_or_dup_object Account, account_or_hash do |hash|
-      hash[:name] ||= Account.default_account_name account_id
-      Account.new hash
+  def add_account account_id, **params
+    validate_account! account_id, params
+    @chart.add_account account_id, params
+  end
+
+  def add_transaction params
+    if params.is_a? Transaction
+      transaction = params
+    else
+      klass = params.has_key?(:schedule) ? ScheduledTransaction : Transaction
+      transaction = klass.new params
+      validate_transaction! transaction
     end
-    validate_account! account_id, account
-    accounts[account_id] = account
+    @transactions.push transaction
   end
 
-  def add_transaction transaction_or_hash
-    transaction = build_or_dup_object Transaction, transaction_or_hash
-    validate_transaction! transaction
-    transactions.push transaction
+  def balanced?
+    balance.zero?
   end
 
-  def balance
-    accounts.inject 0 do |sum, (_, account)|
-      if %i(asset expense).include? account.type
-        sum += account.balance
-      else
-        sum -= account.balance
-      end
+  def project to: end_of_projection, build_next: false, &block
+    must_be_balanced!
+    projection = Projection.new range: (from..to), chart: @chart
+    handler = TransactionHandler.new projection: projection
+    if build_next
+      handler.next_projector = self.class.new from: to + 1, chart: @chart
     end
-  end
-
-  def check_balance!
-    unless balance == 0
-      raise BalanceError, "You cannot run a projection with accounts that "\
-        "aren't balanced; balance is #{balance.inspect}"
-    end
-  end
-
-  def freeze
-    @accounts.freeze
-    @transactions.freeze
-  end
-
-  def project to: nil, &block
-    freeze
-    check_balance!
-    next_projector = self.class.new from: (to + 1)
-    next_projector.accounts = accounts
-    projection = Projection.new(
-      self, 
-      range: (from..to),
-      next_projector: next_projector
-    )
+    @transactions.each do |transaction| handler << transaction; end
     projection.project! &block
-    next_projector
-  end
-
-  def transactions= new_transactions
-    transactions.clear
-    new_transactions.each do |transaction| add_transaction transaction; end
-  end
-
-  def split_account parent_id, into: []
-    parent = accounts.fetch parent_id
-    into.map do |child_id|
-      child = Account.new(
-        name:      Account.default_account_name(parent_id),
-        open_date: parent.open_date,
-        parent_id: parent_id,
-        type:      parent.type,
-      )
-      add_account child_id, child
-    end
+    handler.next_projector
   end
 
   private
 
-  def build_or_dup_object klass, object_or_hash
-    if object_or_hash.is_a? klass
-      object_or_hash.dup
-    elsif block_given?
-      yield object_or_hash
-    else
-      klass.new object_or_hash
+  def must_be_balanced!
+    unless balanced?
+      raise Projector::BalanceError, "Cannot project unless the accounts "\
+        "are in balance"
     end
   end
 
-  def validate_account! id, account
-    existing_account = accounts[id]
-    if existing_account
-      raise Projector::AccountExists, "Account `#{id}' exists; name is "\
-        "`#{existing_account.name}'"
+  def validate_account! account_id, params
+    if @chart.exists? account_id
+      raise Projector::AccountExists, "Account #{account_id.inspect} exists"
     end
-    unless Account::TYPES.include? account.type
-      raise Projector::InvalidAccount, "Account `#{account.name}', does not "\
-        "have a type in #{Account::TYPES.join(', ')}"
+    unless Account::TYPES.include? params[:type]
+      raise Projector::InvalidAccount, "Account #{account_id.inspect} has "\
+        "invalid type #{params[:type].inspect}"
     end
-    if account.balance > 0 && account.open_date > from
-      raise Projector::BalanceError, "Projection starts on #{from}, and "\
-        "account `#{account.name}' starts on #{account.open_date} with a "\
-        "nonzero opening balance of #{account.balance}"
+    if params.has_key?(:open_date) && params[:open_date] > from
+      if params.has_key? :opening_balance
+        raise Projector::InvalidAccount, "Account #{account_id.inspect} opens "\
+          "after projector, but has an opening balance"
+      end
     end
   end
 
   def validate_transaction! transaction
-    if transaction.before? from
+    if transaction.date < from
       raise Projector::InvalidTransaction, "Transactions cannot occur before "\
         "projection start date. (#{from} vs. #{transaction.date})"
+    end
+    unless transaction.balanced?
+      raise Projector::BalanceError, "Credits and debit entries both "\
+        "must be supplied; they cannot amount to zero"
+    end
+    if transaction.credits.empty? || transaction.debits.empty?
+      raise Projector::InvalidTransaction, "You must supply at least a debit "\
+        "and a credit on each transaction"
     end
   end
 

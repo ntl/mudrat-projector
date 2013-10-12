@@ -7,7 +7,6 @@ class Transaction
     @date        = params.fetch :date
     self.credits = extract_entry_params :credit, params
     self.debits  = extract_entry_params :debit,  params
-    validate!
   end
 
   def balanced?
@@ -66,16 +65,5 @@ class Transaction
       hash[balance_key] += entry.scalar
     end
     hash.reduce Set.new do |set, (_, value)| set << value; end
-  end
-
-  def validate!
-    if credits.empty? || debits.empty?
-      raise Projector::InvalidTransaction, "Credits and debits both must have "\
-        "entries"
-    end
-    unless balanced?
-      raise Projector::InvalidTransaction, "Credits and debit entries both "\
-        "must be supplied; they cannot amount to zero"
-    end
   end
 end

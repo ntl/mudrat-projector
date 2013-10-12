@@ -5,6 +5,14 @@ class ChartOfAccounts
     @accounts = {}
   end
 
+  def account_balance id
+    fetch(id).balance + subaccounts_balance(id)
+  end
+
+  def accounts
+    @accounts.keys
+  end
+
   def add_account id, **params
     @accounts[id] = Account.new params
   end
@@ -31,6 +39,10 @@ class ChartOfAccounts
 
   def each &block
     @accounts.values.each &block
+  end
+
+  def exists? account_id
+    @accounts.has_key? account_id
   end
 
   def fetch account_id
@@ -62,7 +74,7 @@ class ChartOfAccounts
 
   def split_account id, into: {}
     parent = fetch id
-    into.each do |sub_account_id, hash|
+    into.map do |sub_account_id, hash|
       @accounts[sub_account_id] = 
         if hash
           parent.create_child(
@@ -74,6 +86,14 @@ class ChartOfAccounts
           parent.create_child parent_id: id
         end
     end
+  end
+
+  def subaccounts_balance id
+    subaccount_ids = @accounts.reduce [] do |ary, (subaccount_id, account)|
+      ary.push subaccount_id if account.parent_id == id
+      ary
+    end
+    subaccount_ids.reduce 0 do |sum, id| sum + account_balance(id); end
   end
 
   def validate_transaction! transaction
