@@ -4,7 +4,7 @@
   hi_rate: 1.45
   personal_exemption: 3_800
   hsa_limit:
-    invididual: 3_100
+    individual: 3_100
     family:     6_250
     senior:     1000
   bracket_rates:

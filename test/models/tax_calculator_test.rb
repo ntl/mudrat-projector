@@ -1,191 +1,112 @@
 require 'test_helper'
 
-__END__
-
-class TaxCalculatorShelleyTest < Minitest::Unit::TestCase
+class TaxCalculatorTest < Minitest::Unit::TestCase
   def setup
-    @projector = Projector.new from: jan_1_2013
-    @projector.accounts = {
-      checking:     { type: :asset,    opening_balance: 50000 },
-      w2_job:       { type: :revenue,  tags: %i(w2)},
-      charity:      { type: :expense,  tags: %i(501c)},
-      hsa:          { type: :asset,    tags: %i(hsa individual)},
-      se_expenses:  { type: :expense,  tags: %i(self_employed)},
-      se_job:       { type: :revenue,
-                      opening_balance: 50000,
-                      tags: %i(self_employed)},
-    }
+    @projector = Projector.new from: jan_1_2012
+    @projector.add_account :checking, type: :asset
+    @projector.add_account :job,      type: :revenue, tags: %i(salary)
+
+    @projector.add_transaction(
+      date: jan_1_2012,
+      credit: { amount: 6000, account_id: :job },
+      debit:  { amount: 6000, account_id: :checking },
+      schedule: every_month,
+    )
+    @projector.add_transaction(
+      date: jun_30_2013,
+      credit: { amount: 3000, account_id: :job },
+      debit:  { amount: 3000, account_id: :checking },
+    )
   end
 
-  # http://taxes.about.com/od/paymentoptions/a/estimated_tax_3.htm
-  def test_shelley
-    @projector.transactions = [{
-      date:     jan_1_2013,
-      credit:   [25000 / 3.0, :se_job],
-      debit:    [25000 / 3.0, :checking],
-      schedule: every_month(dec_31_2013),
-    },{
-      date:     jan_1_2013,
-      credit:   [7500 / 3.0, :checking],
-      debit:    [7500 / 3.0, :se_expenses],
-      schedule: every_month(dec_31_2013),
-    }]
+  def test_basic_1040
+    @tax_calculator = TaxCalculator.new projector: @projector, household: single
+    calculation = @tax_calculator.calculate!
 
-    tax_calculation = calculate single_household
-    assert_equal 2013, tax_calculation.year
-    assert_tax_calculation tax_calculation, gross: 70000, taxes: 19583
+    assert_equal 2012,    calculation.year
+    assert_equal 72000,   calculation.gross
+    assert_equal 72000,   calculation.total_income
+    assert_equal 0,       calculation.adjustments
+    assert_equal 72000,   calculation.agi
+    assert_equal 5950,    calculation.deduction
+    assert_equal 3800,    calculation.exemption
+    assert_equal 4068,    calculation.withholding_tax
+    assert_equal 62250,   calculation.taxable_income
+    assert_equal 11592.5, calculation.income_tax
+    assert_equal 15660.5, calculation.taxes
+    assert_equal 56339.5, calculation.net
+    assert_equal 21.75,   calculation.effective_rate
   end
 
-  def test_shelly_2012
-    @projector.instance_variable_set :@from, jan_1_2012
+  def test_basic_1040_married
+    @tax_calculator = TaxCalculator.new projector: @projector, household: married
+    calculation = @tax_calculator.calculate!
 
-    @projector.transactions = [{
-      date:     jan_1_2012,
-      credit:   [17500 / 3.0, :se_job],
-      debit:    [17500 / 3.0, :checking],
-      schedule: every_month(dec_31_2012),
-    }]
-
-    tax_calculation = calculate single_household
-    assert_equal 2012, tax_calculation.year
-    # shoudl be lower, see http://en.wikipedia.org/wiki/Tax_Relief,_Unemployment_Insurance_Reauthorization,_and_Job_Creation_Act_of_2010
-    assert_tax_calculation tax_calculation, gross: 70000, taxes: 18514
+    assert_equal 11900,  calculation.deduction
+    assert_equal 3800*4, calculation.exemption
   end
 
-  def test_shelley_as_salaried_without_workplace_deductions
-    @projector.transactions = [{
-      date:     jan_1_2013,
-      credit:   [17500 / 3.0, :w2_job],
-      debit:    [17500 / 3.0, :checking],
-      schedule: every_month(dec_31_2013),
-    }]
+  def test_charity_contribution
+    @projector.add_account :public_radio, type: :expense, tags: %i(501c)
+    @projector.add_transaction(
+      date: jun_30_2012,
+      debit:  { amount: 15000, account_id: :public_radio },
+      credit: { amount: 15000, account_id: :checking },
+    )
+    @tax_calculator = TaxCalculator.new projector: @projector, household: single
+    calculation = @tax_calculator.calculate!
 
-    tax_calculation = calculate single_household
-    assert_tax_calculation tax_calculation, gross: 70000, taxes: 16284
+    assert_equal 15000, calculation.deduction
   end
 
-  def test_married_filing_jointly_with_two_kids
-    @projector.transactions = [{
-      date:     jan_1_2013,
-      credit:   [17500 / 3.0, :w2_job],
-      debit:    [17500 / 3.0, :checking],
-      schedule: every_month(dec_31_2013),
-    }]
+  def test_basic_1040_2013
+    @projector = @projector.project to: dec_31_2012, build_next: true
+    @tax_calculator = TaxCalculator.new projector: @projector, household: single
+    calculation = @tax_calculator.calculate!
 
-    tax_calculation = calculate married_two_kids_household
-    assert_tax_calculation tax_calculation, gross: 70000, taxes: 10793
+    assert_equal 75000,  calculation.total_income
+    assert_equal 5737.5, calculation.withholding_tax
   end
 
-  def test_social_security_wage_base
-    @projector.transactions = [{
-      date:     jan_1_2013,
-      credit:   [10000, :w2_job],
-      debit:    [10000, :checking],
-      schedule: every_month(dec_31_2013),
-    }]
+  def test_hsa_deduction
+    @projector.add_account :hsa, type: :asset, tags: %i(hsa individual)
+    @tax_calculator = TaxCalculator.new projector: @projector, household: single
+    @projector.add_transaction(
+      date: jun_30_2012,
+      debit:  { amount: 4000, account_id: :hsa },
+      credit: { amount: 4000, account_id: :checking },
+    )
+    calculation = @tax_calculator.calculate!
 
-    tax_calculation = calculate married_two_kids_household
-    assert_tax_calculation tax_calculation, gross: 120000, taxes: 23696.9
+    assert_equal 72000, calculation.gross
+    assert_equal 72000, calculation.total_income
+    assert_equal 3100,  calculation.adjustments
+    assert_equal 68900, calculation.agi
   end
 
-  def test_mix_of_salaried_and_self_employed
-    @projector.transactions = [{
-      date:     jan_1_2013,
-      credit:   [10000, :w2_job],
-      debit:    [10000, :checking],
-      schedule: every_month(dec_31_2013),
-    },{
-      date:     jan_1_2013,
-      credit:   [800, :se_job],
-      debit:    [800, :checking],
-      schedule: every_month(dec_31_2013),
-    }]
+  def test_pretax_hsa_deduction
+    @projector.add_account :hsa, type: :asset, tags: %i(hsa family)
+    @projector.add_transaction(
+      date: jun_30_2012,
+      debit:  { amount: 7000, account_id: :hsa },
+      credit: { amount: 7000, account_id: :job },
+    )
+    @tax_calculator = TaxCalculator.new projector: @projector, household: single
+    calculation = @tax_calculator.calculate!
 
-    tax_calculation = calculate married_two_kids_household
-    assert_tax_calculation tax_calculation, gross: 129600, taxes: 27284.10
+    assert_equal 79000, calculation.gross
+    assert_equal 72000, calculation.total_income
+    assert_equal 0,     calculation.adjustments
+    assert_equal 72000, calculation.agi
   end
 
-  def test_itemized_deductions
-    @projector.transactions = [{
-      date:     jan_1_2013,
-      credit:   [17500 / 3.0, :w2_job],
-      debit:    [17500 / 3.0, :checking],
-      schedule: every_month(dec_31_2013),
-    },{
-      date:     jan_1_2013,
-      credit:   [1500, :checking],
-      debit:    [1500, :charity],
-      schedule: every_month(dec_31_2013),
-    }]
-
-    tax_calculation = calculate married_two_kids_household
-    assert_tax_calculation tax_calculation, gross: 70000, taxes: 9922.5
-  end
-
-  def test_hsa_above_the_line_deduction
-    @projector.transactions = [{
-      date:     jan_1_2013,
-      credit:   [17500 / 3.0, :w2_job],
-      debit:    [17500 / 3.0, :checking],
-      schedule: every_month(dec_31_2013),
-    },{
-      date:     jan_1_2013,
-      credit:   [300, :checking],
-      debit:    [300, :hsa],
-      schedule: every_month(dec_31_2013),
-    }]
-
-    tax_calculation = calculate married_two_kids_household
-    assert_tax_calculation tax_calculation, gross: 70000, taxes: 10305
-  end
-
-  def test_hsa_pretax_deduction
-    @projector.accounts[:hsa].instance_variable_set :@tags, %i(hsa family senior)
-    @projector.transactions = [{
-      date:     jan_1_2013,
-      credit:   [10000, :w2_job],
-      debits:   [[9000, :checking],
-                 [1000, :hsa]],
-      schedule: every_month(dec_31_2013),
-    }]
-
-    tax_calculation = calculate married_two_kids_household
-    assert_tax_calculation tax_calculation, gross: 120000, taxes: 21655
-  end
-
-  def test_mortgage_interest_and_property_taxes
-    skip
-  end
-
-  def test_alternative_minimum
-    skip
-  end
-  
   private
 
-  def calculate household
-    tax_calculator = TaxCalculator.new(
-      household: household,
-      projector: @projector,
-    )
-    tax_calculator.project
+  def single
+    { filing_status: :single, exemptions: 1 }
   end
 
-  def married_two_kids_household
-    TaxCalculator::Household.new :married_filing_jointly, 4
-  end
-
-  def single_household
-    TaxCalculator::Household.new :single, 1
-  end
-
-  def assert_tax_calculation tax_calculation, gross: 0, taxes: 0
-    expected_net  = gross - taxes
-    expected_rate = ((taxes * 100.0) / gross).round 2
-
-    assert_in_delta gross,         tax_calculation.gross,          1
-    assert_in_delta taxes,         tax_calculation.taxes,          1
-    assert_in_delta expected_net,  tax_calculation.net,            1
-    assert_in_delta expected_rate, tax_calculation.effective_rate, 0.01
+  def married
+    { filing_status: :married_filing_jointly, exemptions: 4 }
   end
 end
