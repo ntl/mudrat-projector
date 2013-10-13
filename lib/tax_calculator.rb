@@ -53,7 +53,7 @@ class TaxCalculator
           @interest_paid      += entry.delta if account.tag? :mortgage_interest
           @taxes_paid         += entry.delta if account.tag? :tax
         elsif account.type == :asset
-          @other_adjustments  += entry.delta if account.tag? :hsa
+          @other_adjustments  += entry.delta if account.tag?(:hsa) && entry.debit?
         end
       end
     end
