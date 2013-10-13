@@ -61,4 +61,8 @@ class Projector
     handler.next_projector
   end
 
+  def transactions= transactions
+    transactions.each do |transaction| add_transaction transaction; end
+  end
+
 end

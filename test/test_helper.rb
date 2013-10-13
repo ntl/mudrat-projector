@@ -6,6 +6,8 @@ require 'minitest/reporters'
 require 'ostruct'
 require 'pp'
 
+load File.expand_path('../../lib/load.rb', __FILE__)
+
 # Require pry library on demand to avoid eating its >500ms start up penalty
 class Binding
   def method_missing sym, *args
@@ -25,7 +27,12 @@ class Date
   end
 end
 
-load File.expand_path('../../lib/load.rb', __FILE__)
+# BigDecimal needs friendlier output
+class BigDecimal < Numeric
+  def inspect
+    "#<BigDecmial:#{round(10).to_f.inspect}>"
+  end
+end
 
 MiniTest::Reporters.use! MiniTest::Reporters::DefaultReporter.new
 

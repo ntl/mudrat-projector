@@ -41,16 +41,19 @@ class MortgageTest < Minitest::Unit::TestCase
   end
 
   def test_net_worth_after_first_year
-    skip
+    expected_checking_balance = 72000 - (9110.90 + 2699.17)
+    expected_net_worth = expected_checking_balance + @home_value - 197_300.83
+
     pay_off_loan years: 30
     @projector.project to: dec_31_2012
-    assert_in_epsilon ((72000 + 250000 - 9110.90) - 197_300.83), @projector.net_worth.round(2).to_f
+
+    assert_in_epsilon expected_net_worth, @projector.net_worth
   end
 
   def test_mortgage_balances_to_zero_at_end_of_term
     pay_off_loan years: 30
     @projector.project to: jan_31_2042
-    assert_equal 0, @projector.account_balance(:mortgage).round(2).to_f
+    assert_in_epsilon 0, @projector.account_balance(:mortgage)
   end
 
   def test_pay_off_mortgage_early

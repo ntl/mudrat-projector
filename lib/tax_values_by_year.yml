@@ -1,7 +1,7 @@
 2012:
-  oasdi: 6.2
+  oasdi_rate: 6.2
   oasdi_wage_base: 110_100
-  hi: 1.45
+  hi_rate: 1.45
   personal_exemption: 3_800
   hsa_limit:
     invididual: 3_100
@@ -33,26 +33,24 @@
   single:
     standard_deduction: 5_950
     brackets:
-      - 8_925
-      - 36_250
-      - 87_850
-      - 183_250
-      - 398_350
-      - 400_000
+      - 8_700
+      - 35_350
+      - 85_650
+      - 178_650
+      - 388_350
   head_of_household:
     standard_deduction: 8_700
     brackets:
-      - 12_750
-      - 48_600
-      - 125_450
-      - 203_150
-      - 398_350
-      - 425_000
+      - 12_400
+      - 47_350
+      - 122_300
+      - 190_050
+      - 388_350
 
 2013:
-  oasdi: 6.2
+  oasdi_rate: 6.2
   oasdi_wage_base: 113_700
-  hi: 1.45
+  hi_rate: 1.45
   personal_exemption: 3_900
   hsa_limit:
     individual: 3_250
