@@ -9,15 +9,6 @@ class ProjectionTest < Minitest::Unit::TestCase
     @projection = Projection.new range: (jan_1_2000..dec_31_2000), chart: @chart
   end
 
-  def test_cannot_add_transaction_outside_of_range
-    assert_raises Projector::InvalidTransaction do
-      @projection << valid_transaction(date: dec_31_1999)
-    end
-    assert_raises Projector::InvalidTransaction do
-      @projection << valid_transaction(date: jan_1_2001)
-    end
-  end
-
   def test_adding_transaction
     @projection << valid_transaction
     assert_equal 1, @projection.transaction_sequence.size

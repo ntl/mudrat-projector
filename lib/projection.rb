@@ -8,7 +8,7 @@ class Projection
   end
 
   def << transaction
-    validate_transaction! transaction
+    #validate_transaction! transaction
     @transaction_sequence.push transaction
   end
 
