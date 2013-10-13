@@ -7,7 +7,7 @@ class TransactionHandler
 
   def << transaction
     in_projection, leftover = transaction.slice @projection.range.end
-    in_projection.each do |transaction| @projection << transaction; end
+    @projection.add_transaction_batch in_projection
     defer leftover if leftover
   end
 

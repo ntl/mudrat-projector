@@ -69,7 +69,7 @@ class TransactionEntry
   end
 
   def inspect
-    "#<#{self.class}: scalar=#{fmt(scalar)}, account_id=#{account_id.inspect} type=#{@credit_or_debit.inspect}>"
+    "#<#{self.class}: amount=#{fmt(scalar)}, account_id=#{account_id.inspect} type=#{@credit_or_debit.inspect}>"
   end
 
   def serialize
@@ -109,9 +109,7 @@ class PercentageTransactionEntry < TransactionEntry
   end
 
   def inspect
-    super.tap do |s|
-      s.insert -2, ", other_account_id=#{other_account_id.inspect}"
-    end
+    "#<#{self.class}: percent=#{fmt(scalar * 100)}%, account_id=#{account_id.inspect} type=#{@credit_or_debit.inspect}, other_account_id=#{other_account_id.inspect}>"
   end
 
   def serialize

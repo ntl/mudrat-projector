@@ -1,15 +1,32 @@
 class Projection
   attr :range
 
+  SequenceEntry = Struct.new :transaction, :batch_id do
+    def sort_key
+      [transaction.date, batch_id]
+    end
+
+    def <=> other_entry
+      sort_key <=> other_entry.sort_key
+    end
+  end
+
   def initialize range: date_range, chart: chart_of_accounts
     @chart                = chart
+    @batch_id             = 0
     @range                = range
     @transaction_sequence = []
   end
 
   def << transaction
-    #validate_transaction! transaction
-    @transaction_sequence.push transaction
+    @transaction_sequence.push SequenceEntry.new(transaction, @batch_id)
+  end
+
+  def add_transaction_batch batch
+    batch.each do |transaction| 
+      self << transaction
+      @batch_id += 1
+    end
   end
 
   def project!
@@ -21,13 +38,6 @@ class Projection
   end
 
   def transaction_sequence
-    @transaction_sequence.sort do |a,b| a.date <=> b.date; end
-  end
-
-  def validate_transaction! transaction
-    unless range.include? transaction.date
-      raise Projector::InvalidTransaction, "Transaction date "\
-        "#{transaction.date} falls outside of range #{range.inspect}"
-    end
+    @transaction_sequence.tap(&:sort!).map &:transaction
   end
 end
