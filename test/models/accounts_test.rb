@@ -2,7 +2,8 @@ require 'test_helper'
 
 class AccountTest < Minitest::Unit::TestCase
   def setup
-    @account = Account.new type: :asset
+    @chart = ChartOfAccounts.new
+    @account = @chart.add_account :foo, type: :asset
   end
 
   # Closed means "are the books closed?", e.g. are there any transactions that
@@ -31,6 +32,8 @@ class AccountTest < Minitest::Unit::TestCase
   private
 
   def add_transaction_entry
-    @account.add_entry TransactionEntry.new_debit account_id: :foo, amount: 1
+    entry = TransactionEntry.new_debit account_id: :foo, amount: 1
+    entry.calculate @chart
+    @account.add_entry entry
   end
 end

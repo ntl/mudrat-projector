@@ -24,22 +24,13 @@ class TaxCalculation
   end
 
   def << transaction
-    transaction.credits.each do |entry|
-      account = projector.fetch entry.account_id
-      if account.type == :revenue
-        @w2_gross += entry.amount if account.tag? :salary
-        @se_gross += entry.amount if account.tag? :self_employed
-      end
-    end
+    @w2_gross += transaction.salaries_and_wages
+    @se_gross += transaction.business_profit
+    @charity  += transaction.charitable_contributions
+    @pretax_deductions += transaction.pretax_deductions
     transaction.debits.each do |entry|
       account = projector.fetch entry.account_id
-      if account.type == :expense
-        if account.tag? :self_employed
-          @se_gross -= entry.amount
-        elsif account.tag? '501c'.to_sym
-          @charity += entry.amount
-        end
-      elsif account.type == :asset && account.tag?(:hsa)
+      if account.type == :asset && account.tag?(:hsa)
         revenue = transaction.credits.select { |e| a = projector.fetch(e.account_id); a.type == :revenue && a.tag?(:salary)}
         @pretax_deductions += revenue.reduce 0 do |s,e| s + e.amount; end
         @hsa_contribs[account] += [entry.amount - pretax_deductions, 0].max

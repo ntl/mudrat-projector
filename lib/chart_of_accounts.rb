@@ -19,7 +19,7 @@ class ChartOfAccounts
 
   def apply_transaction transaction
     validate_transaction! transaction
-    transaction.entries.each do |entry| entry.calculate_amount self; end
+    transaction.entries.each do |entry| entry.calculate self; end
     transaction.entries.each do |entry|
       fetch(entry.account_id).add_entry entry
     end

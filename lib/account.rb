@@ -15,8 +15,7 @@ class Account
 
   def add_entry entry
     @entries.push entry
-    check = %i(asset expense).include?(type) ? :debit? : :credit?
-    @offset += entry.public_send(check) ? entry.amount : -entry.amount
+    @offset += entry.delta
   end
 
   def balance

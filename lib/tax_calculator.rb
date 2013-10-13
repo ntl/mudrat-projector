@@ -21,6 +21,51 @@ class TaxCalculator
     end
   end
 
+  class TransactionWrapper
+    INCOME_VALUES      = %i(business_profit salaries_and_wages)
+    ADJUSTMENTS_VALUES = %i(other_adjustments)
+    DEDUCTIONS_VALUES  = %i(charitable_contributions)
+    CREDITS_VALUES     = %i()
+
+    VALUES = [INCOME_VALUES, ADJUSTMENTS_VALUES, DEDUCTIONS_VALUES, CREDITS_VALUES].flatten 1
+
+    attr :calculator, :pretax_deductions
+    private :calculator
+
+    def initialize calculator, transaction
+      @calculator = calculator
+      @transaction = transaction
+      @pretax_deductions = 0
+      VALUES.each do |attr_name| instance_variable_set "@#{attr_name}", 0; end
+    end
+
+    VALUES.each do |attr_name| attr attr_name; end
+
+    def calculate!
+      @transaction.entries.each do |entry|
+        account = calculator.projector.fetch entry.account_id
+        if account.type == :revenue
+          @salaries_and_wages += entry.delta if account.tag? :salary
+          @business_profit    += entry.delta if account.tag? :self_employed
+        elsif account.type == :expense
+          @business_profit    -= entry.delta if account.tag? :self_employed
+          @charitable_contributions +=
+                                 entry.delta if account.tag? "501c".to_sym
+        elsif account.type == :asset
+          @other_adjustments  += entry.delta if account.tag? :hsa
+        end
+      end
+    end
+    
+    def debits
+      @transaction.debits
+    end
+
+    def credits
+      @transaction.credits
+    end
+  end
+
   def initialize projector: nil, household: {}
     @household   = Household.new(
       household.fetch(:filing_status),
@@ -34,7 +79,7 @@ class TaxCalculator
   def calculate!
     calculation = TaxCalculation.new projector, household, @values_hash
     projector.project to: Date.new(year, 12, 31) do |transaction|
-      calculation << transaction
+      calculation << TransactionWrapper.new(self, transaction).tap(&:calculate!)
     end
     calculation
   end

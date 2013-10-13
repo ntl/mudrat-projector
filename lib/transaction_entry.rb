@@ -26,7 +26,7 @@ class TransactionEntry
       return unless params.has_key? :amount
       params = params.dup
       params[:scalar] = params.delete :amount
-      throw :instance, new(params).tap(&:calculate_amount)
+      throw :instance, new(params).tap(&:calculate)
     end
 
     def maybe_build_new_percentage_entry params
@@ -40,6 +40,8 @@ class TransactionEntry
 
   extend TransactionEntry::Factory
 
+  attr :amount, :delta
+
   def initialize params = {}
     @account_id      = params.fetch :account_id
     @scalar          = params.fetch :scalar
@@ -52,11 +54,15 @@ class TransactionEntry
     self.class.new serialize.merge(scalar: scalar * multiplier)
   end
 
-  def amount
-    @amount
+  def calculate chart_of_accounts = nil
+    @amount = calculate_amount chart_of_accounts
+    return if chart_of_accounts.nil?
+    account_type = chart_of_accounts.fetch(account_id).type
+    check = %i(asset expense).include?(account_type) ? :debit? : :credit?
+    @delta = send(check) ? amount : -amount
   end
 
-  def calculate_amount chart_of_accounts = nil
+  def calculate_amount chart_of_accounts
     @amount = scalar
   end
 

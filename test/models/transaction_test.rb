@@ -64,14 +64,3 @@ class TransactionTest < Minitest::Unit::TestCase
     )
   end
 end
-
-class ScheduledTransactionTest < Minitest::Unit::TestCase
-  def test_all_transactions_over_range_returns_a_one_time_transaction
-  end
-
-  def test_all_transactions_over_range_returns_a_transaction_for_each_interval
-  end
-
-  def test_all_transactions_over_range_returns_a_final_prorated_transaction
-  end
-end

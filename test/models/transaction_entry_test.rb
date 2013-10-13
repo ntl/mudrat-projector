@@ -18,4 +18,20 @@ class TransactionEntryTest < MiniTest::Unit::TestCase
       TransactionEntry.new credit_or_debit: :credit, amount: 1
     end
   end
+
+  def test_calculate_amount_sets_amount_and_delta
+    chart = ChartOfAccounts.new
+    chart.add_account :checking, type: :asset, opening_balance: 1000
+    chart.add_account :job, type: :revenue, opening_balance: 1000
+    
+    t1 = TransactionEntry.new credit_or_debit: :credit, amount: 1, account_id: :checking
+    t1.calculate chart
+    assert_equal 1, t1.amount
+    assert_equal -1, t1.delta
+
+    t2 = TransactionEntry.new credit_or_debit: :debit, percent: 0.5, of: :checking, account_id: :checking
+    t2.calculate chart
+    assert_equal 500, t2.amount
+    assert_equal 500, t2.delta
+  end
 end
