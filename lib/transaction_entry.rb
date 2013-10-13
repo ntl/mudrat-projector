@@ -68,6 +68,10 @@ class TransactionEntry
     @credit_or_debit == :debit
   end
 
+  def inspect
+    "#<#{self.class}: scalar=#{fmt(scalar)}, account_id=#{account_id.inspect} type=#{@credit_or_debit.inspect}>"
+  end
+
   def serialize
     {
       account_id:       account_id,
@@ -84,6 +88,12 @@ class TransactionEntry
       raise ArgumentError, "Must supply :credit or :debit, not #{@credit_or_debit.inspect}"
     end
   end
+
+  private
+
+  def fmt number
+    number.respond_to?(:round) ? number.round(2).to_f : number
+  end
 end
 
 class PercentageTransactionEntry < TransactionEntry
@@ -96,6 +106,12 @@ class PercentageTransactionEntry < TransactionEntry
 
   def calculate_amount chart_of_accounts
     @amount = scalar * chart_of_accounts.fetch(other_account_id).balance
+  end
+
+  def inspect
+    super.tap do |s|
+      s.insert -2, ", other_account_id=#{other_account_id.inspect}"
+    end
   end
 
   def serialize

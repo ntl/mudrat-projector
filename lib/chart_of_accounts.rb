@@ -108,7 +108,7 @@ class ChartOfAccounts
         "existent account #{entry.account_id.inspect}"
     end
     open_date = fetch(entry.account_id).open_date
-    unless open_date < transaction_date
+    unless open_date <= transaction_date
       raise Projector::AccountDoesNotExist, "Transaction references account "\
         "#{entry.account_id.inspect} which does not open until #{open_date}, "\
         "but transaction is set for #{transaction_date}"

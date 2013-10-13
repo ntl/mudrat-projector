@@ -96,23 +96,13 @@ class ChartOfAccountsTest < Minitest::Unit::TestCase
   end
 
   def test_applying_transaction_for_non_existent_or_future_accounts_raises_error
-    @chart.add_account :checking, type: :asset, open_date: jan_2_2000
+    @chart.add_account :checking, type: :asset, open_date: jan_1_2000
     @chart.add_account :job, type: :revenue
 
     transaction = Transaction.new(
       date: jan_2_2000,
       debit:  { amount: 1234, account_id: :no_existe, credit_or_debit: :debit },
       credit: { amount: 1234, account_id: :job,       credit_or_debit: :credit },
-    )
-
-    assert_raises Projector::AccountDoesNotExist do
-      @chart.apply_transaction transaction
-    end
-
-    transaction = Transaction.new(
-      date: jan_1_2000,
-      debit:  { amount: 1234, account_id: :checking, credit_or_debit: :debit },
-      credit: { amount: 1234, account_id: :job, credit_or_debit: :credit },
     )
 
     assert_raises Projector::AccountDoesNotExist do
