@@ -100,6 +100,25 @@ class TaxCalculatorTest < Minitest::Unit::TestCase
     assert_equal 72000, calculation.agi
   end
 
+  def test_mortgage_interest_and_property_taxes_paid
+    @projector.add_account :interest, type: :expense, tags: %i(mortgage_interest)
+    @projector.add_account :property_taxes, type: :expense, tags: %i(property tax)
+    @projector.add_transaction(
+      date: jun_30_2012,
+      debit:  { amount: 7500, account_id: :interest },
+      credit: { amount: 7500, account_id: :job },
+    )
+    @projector.add_transaction(
+      date: jun_30_2012,
+      debit:  { amount: 5000, account_id: :property_taxes },
+      credit: { amount: 5000, account_id: :job },
+    )
+    @tax_calculator = TaxCalculator.new projector: @projector, household: single
+    calculation = @tax_calculator.calculate!
+
+    assert_equal 12500, calculation.deduction
+  end
+
   private
 
   def single

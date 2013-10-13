@@ -11,7 +11,7 @@ class TaxCalculation
     @pretax_deductions = 0
     @hsa_contribs = Hash.new { |h,k| h[k] = 0 }
     @household = household
-    @charity = 0
+    @itemized_deduction = 0
     extend_year_shim
   end
 
@@ -26,8 +26,9 @@ class TaxCalculation
   def << transaction
     @w2_gross += transaction.salaries_and_wages
     @se_gross += transaction.business_profit
-    @charity  += transaction.charitable_contributions
-    @pretax_deductions += transaction.pretax_deductions
+    @itemized_deduction += transaction.charitable_contributions
+    @itemized_deduction += transaction.interest_paid
+    @itemized_deduction += transaction.taxes_paid
     transaction.debits.each do |entry|
       account = projector.fetch entry.account_id
       if account.type == :asset && account.tag?(:hsa)
@@ -92,7 +93,7 @@ class TaxCalculation
   end
 
   def itemized_deduction
-    @charity
+    @itemized_deduction
   end
 
   def medicare_withheld

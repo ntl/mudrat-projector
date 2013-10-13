@@ -24,18 +24,17 @@ class TaxCalculator
   class TransactionWrapper
     INCOME_VALUES      = %i(business_profit salaries_and_wages)
     ADJUSTMENTS_VALUES = %i(other_adjustments)
-    DEDUCTIONS_VALUES  = %i(charitable_contributions)
+    DEDUCTIONS_VALUES  = %i(charitable_contributions interest_paid taxes_paid)
     CREDITS_VALUES     = %i()
 
     VALUES = [INCOME_VALUES, ADJUSTMENTS_VALUES, DEDUCTIONS_VALUES, CREDITS_VALUES].flatten 1
 
-    attr :calculator, :pretax_deductions
+    attr :calculator
     private :calculator
 
     def initialize calculator, transaction
       @calculator = calculator
       @transaction = transaction
-      @pretax_deductions = 0
       VALUES.each do |attr_name| instance_variable_set "@#{attr_name}", 0; end
     end
 
@@ -51,6 +50,8 @@ class TaxCalculator
           @business_profit    -= entry.delta if account.tag? :self_employed
           @charitable_contributions +=
                                  entry.delta if account.tag? "501c".to_sym
+          @interest_paid      += entry.delta if account.tag? :mortgage_interest
+          @taxes_paid         += entry.delta if account.tag? :tax
         elsif account.type == :asset
           @other_adjustments  += entry.delta if account.tag? :hsa
         end
