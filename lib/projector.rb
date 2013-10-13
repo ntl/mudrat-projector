@@ -20,13 +20,17 @@ class Projector
     @validator    = Validator.new projector: self, chart: @chart
   end
 
-  def_delegators :@chart, *%i(accounts account_balance balance fetch net_worth split_account)
+  def_delegators :@chart, *%i(accounts account_balance apply_transaction balance fetch net_worth split_account)
   def_delegators :@validator, *%i(must_be_balanced! validate_account! validate_transaction!)
 
   def accounts= accounts
     accounts.each do |account_id, params|
       add_account account_id, params
     end
+  end
+
+  def account_exists? account_id
+    @chart.exists? account_id
   end
 
   def add_account account_id, **params

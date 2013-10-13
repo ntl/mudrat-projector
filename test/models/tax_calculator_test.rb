@@ -34,16 +34,30 @@ class TaxCalculatorTest < Minitest::Unit::TestCase
     assert_equal 62250,   calculation.taxable_income
     assert_equal 11592.5, calculation.income_tax
     assert_equal 15660.5, calculation.taxes
+    assert_equal 15660.5, calculation.taxes_owed
     assert_equal 56339.5, calculation.net
     assert_equal 21.75,   calculation.effective_rate
+  end
+
+  def test_basic_1040_with_withholding
+    @projector.add_transaction(
+      date: jan_1_2012,
+      credit: { amount: 1000, account_id: :checking },
+      debit:  { amount: 1000, account_id: TaxCalculator::EXPENSE_ACCOUNT_ID },
+      schedule: every_month,
+    )
+
+    @tax_calculator = TaxCalculator.new projector: @projector, household: single
+    calculation = @tax_calculator.calculate!
+    assert_equal 3660.5, calculation.taxes_owed
   end
 
   def test_basic_1040_married
     @tax_calculator = TaxCalculator.new projector: @projector, household: married
     calculation = @tax_calculator.calculate!
 
-    assert_equal 11900,  calculation.deduction
-    assert_equal 3800*4, calculation.exemption
+    assert_equal 11900, calculation.deduction
+    assert_equal 3800 * 4, calculation.exemption
   end
 
   def test_charity_contribution

@@ -21,19 +21,29 @@ class TaxCalculator
     end
   end
 
+  def self.project projector, to: end_date, household: nil
+    tax_calculator = new projector: projector, household: household
+    (projector.from.year..to.year).each do
+      calculation = tax_calculator.calculate!
+      yield calculation if block_given?
+    end
+    tax_calculator.projector
+  end
+
   class TransactionWrapper
-    INCOME_VALUES      = %i(business_profit salaries_and_wages)
+    INCOME_VALUES      = %i(business_profit dividend_income salaries_and_wages)
     ADJUSTMENTS_VALUES = %i(other_adjustments)
     DEDUCTIONS_VALUES  = %i(charitable_contributions interest_paid taxes_paid)
     CREDITS_VALUES     = %i()
 
     VALUES = [INCOME_VALUES, ADJUSTMENTS_VALUES, DEDUCTIONS_VALUES, CREDITS_VALUES].flatten 1
 
-    attr :calculator
+    attr :calculator, :taxes_withheld
     private :calculator
 
     def initialize calculator, transaction
       @calculator = calculator
+      @taxes_withheld = 0
       @transaction = transaction
       VALUES.each do |attr_name| instance_variable_set "@#{attr_name}", 0; end
     end
@@ -46,12 +56,14 @@ class TaxCalculator
         if account.type == :revenue
           @salaries_and_wages += entry.delta if account.tag? :salary
           @business_profit    += entry.delta if account.tag? :self_employed
+          @dividend_income    += entry.delta if account.tag? :dividend
         elsif account.type == :expense
           @business_profit    -= entry.delta if account.tag? :self_employed
           @charitable_contributions +=
                                  entry.delta if account.tag? "501c".to_sym
           @interest_paid      += entry.delta if account.tag? :mortgage_interest
           @taxes_paid         += entry.delta if account.tag? :tax
+          @taxes_withheld     += entry.delta if entry.account_id == EXPENSE_ACCOUNT_ID
         elsif account.type == :asset
           @other_adjustments  += entry.delta if account.tag?(:hsa) && entry.debit?
         end
@@ -74,14 +86,28 @@ class TaxCalculator
     )
     @projector   = projector
     @values_hash = parse_yaml
-    projector.add_account EXPENSE_ACCOUNT_ID, type: :expense
+    unless projector.account_exists? EXPENSE_ACCOUNT_ID
+      projector.add_account EXPENSE_ACCOUNT_ID, type: :expense
+    end
+    unless projector.account_exists? :owed_taxes
+      projector.add_account :owed_taxes, type: :liability
+    end
   end
 
   def calculate!
+    end_of_calendar_year = Date.new year, 12, 31
     calculation = TaxCalculation.new projector, household, @values_hash
-    projector.project to: Date.new(year, 12, 31) do |transaction|
+    next_projector = projector.project to: end_of_calendar_year, build_next: true do |transaction|
       calculation << TransactionWrapper.new(self, transaction).tap(&:calculate!)
     end
+    final_transaction = Transaction.new(
+      date: end_of_calendar_year,
+      debit:  { amount: calculation.taxes_owed, account_id: EXPENSE_ACCOUNT_ID },
+      credit: { amount: calculation.taxes_owed, account_id: :owed_taxes },
+    )
+    projector.apply_transaction final_transaction
+    @projector = next_projector
+    @values_hash = parse_yaml
     calculation
   end
 
@@ -93,7 +119,9 @@ class TaxCalculator
 
   def parse_yaml
     yaml = File.expand_path '../tax_values_by_year.yml', __FILE__
-    parsed = YAML.load(File.read(yaml)).fetch(year).tap do |hash|
+    by_year = YAML.load File.read(yaml)
+    max_year = by_year.keys.max
+    parsed = by_year.fetch([year, max_year].min).tap do |hash|
       recursively_symbolize_keys! hash
     end
     hash = parsed.fetch household.filing_status

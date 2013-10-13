@@ -1,7 +1,7 @@
 class TaxCalculation
   attr :values_hash
-  attr :w2_gross, :se_gross, :pretax_deductions
-  attr :projector, :household
+  attr :w2_gross, :se_gross, :pretax_deductions, :other_gross
+  attr :projector, :household, :taxes_withheld
 
   def initialize projector, household, values_hash
     @values_hash = values_hash
@@ -12,6 +12,8 @@ class TaxCalculation
     @hsa_contribs = Hash.new { |h,k| h[k] = 0 }
     @household = household
     @itemized_deduction = 0
+    @taxes_withheld = 0
+    @other_gross = 0
     extend_year_shim
   end
 
@@ -26,9 +28,11 @@ class TaxCalculation
   def << transaction
     @w2_gross += transaction.salaries_and_wages
     @se_gross += transaction.business_profit
+    @other_gross += transaction.dividend_income
     @itemized_deduction += transaction.charitable_contributions
     @itemized_deduction += transaction.interest_paid
     @itemized_deduction += transaction.taxes_paid
+    @taxes_withheld     += transaction.taxes_withheld
     transaction.debits.each do |entry|
       account = projector.fetch entry.account_id
       if account.type == :asset && account.tag?(:hsa)
@@ -67,7 +71,7 @@ class TaxCalculation
   end
 
   def gross
-    w2_gross + se_gross
+    w2_gross + se_gross + other_gross
   end
 
   def income_tax
@@ -119,6 +123,10 @@ class TaxCalculation
 
   def taxes
     withholding_tax + income_tax + self_employment_tax
+  end
+
+  def taxes_owed
+    taxes - taxes_withheld
   end
 
   def total_income
