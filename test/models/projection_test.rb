@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class ProjectionTest < Minitest::Unit::TestCase
+class ProjectionTest < Minitest::Test
   def setup
     @chart = ChartOfAccounts.new.tap do |c|
       c.add_account :checking, type: :asset

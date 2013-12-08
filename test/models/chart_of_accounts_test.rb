@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class ChartOfAccountsTest < Minitest::Unit::TestCase
+class ChartOfAccountsTest < Minitest::Test
   def setup
     @chart = ChartOfAccounts.new
   end

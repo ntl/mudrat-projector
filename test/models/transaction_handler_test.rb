@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class TransactionHandlerTest < Minitest::Unit::TestCase
+class TransactionHandlerTest < Minitest::Test
   def setup
     @chart = ChartOfAccounts.new.tap do |c|
       c.add_account :checking, type: :asset

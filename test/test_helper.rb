@@ -1,12 +1,13 @@
 require 'simplecov' if ENV['COVERAGE']
 
 require 'minitest/autorun'
+require 'minitest/unit'
 require 'minitest/reporters'
 
 require 'ostruct'
 require 'pp'
 
-load File.expand_path('../../lib/load.rb', __FILE__)
+require 'mudrat_projector'
 
 # Require pry library on demand to avoid eating its >500ms start up penalty
 class Binding
@@ -34,9 +35,11 @@ class BigDecimal < Numeric
   end
 end
 
-MiniTest::Reporters.use! MiniTest::Reporters::DefaultReporter.new
+Minitest::Reporters.use! MiniTest::Reporters::DefaultReporter.new
 
-MiniTest::Unit::TestCase.class_eval do
+class Minitest::Test
+  include MudratProjector
+
   # Enable you to just call "jan_1_2000" to new up a date.
   def method_missing sym, *args, &block
     return super if block_given? || args.size > 0

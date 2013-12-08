@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class LongTermProjectiontest < Minitest::Unit::TestCase
+class LongTermProjectiontest < Minitest::Test
   def setup
     @projector = Projector.new from: jan_1_2012
     @projector.add_account :checking,   type: :asset

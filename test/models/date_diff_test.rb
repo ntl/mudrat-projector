@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class DateDiffTest < MiniTest::Unit::TestCase
+class DateDiffTest < Minitest::Test
   def test_date_diff_via_keyword_args
     via_keyword_args = date_diff(
       unit: :year,

@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class ValidatorTest < Minitest::Unit::TestCase
+class ValidatorTest < Minitest::Test
   def setup
     @projector = Projector.new from: jan_1_2000
     @projector.add_account :checking, type: :asset

@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class AccountTest < Minitest::Unit::TestCase
+class AccountTest < Minitest::Test
   def setup
     @chart = ChartOfAccounts.new
     @account = @chart.add_account :foo, type: :asset

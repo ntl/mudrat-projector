@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class MortgageTest < Minitest::Unit::TestCase
+class MortgageTest < Minitest::Test
   def setup
     @loan_amount       = 200_000
     @home_value        = 250_000

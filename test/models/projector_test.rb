@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class ProjectorTest < MiniTest::Unit::TestCase
+class ProjectorTest < Minitest::Test
   def setup
     @projector = Projector.new from: jan_1_2000
     @projector.add_account :checking, type: :asset
@@ -40,7 +40,7 @@ class ProjectorTest < MiniTest::Unit::TestCase
   end
 end
 
-class ProjectorAccountsTest < Minitest::Unit::TestCase
+class ProjectorAccountsTest < Minitest::Test
   def setup
     @projector = Projector.new from: jan_1_2000
   end
@@ -112,7 +112,7 @@ class ProjectorAccountsTest < Minitest::Unit::TestCase
   end
 end
 
-class ProjectorTransactionTest < Minitest::Unit::TestCase
+class ProjectorTransactionTest < Minitest::Test
   def setup
     @projector = Projector.new from: jan_1_2000
     @projector.add_account :checking, type: :asset

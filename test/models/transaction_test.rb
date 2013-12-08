@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class TransactionTest < Minitest::Unit::TestCase
+class TransactionTest < Minitest::Test
   def test_balanced_on_fixed_transactions
     assert Transaction.new(
       date: jan_1_2000,

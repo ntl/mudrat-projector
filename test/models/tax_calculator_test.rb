@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class TaxCalculatorTest < Minitest::Unit::TestCase
+class TaxCalculatorTest < Minitest::Test
   def setup
     @projector = Projector.new from: jan_1_2012
     @projector.add_account :checking, type: :asset

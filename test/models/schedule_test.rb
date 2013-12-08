@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class ScheduledTransactionTest < Minitest::Unit::TestCase
+class ScheduledTransactionTest < Minitest::Test
   def test_slice_does_not_return_leftover_if_ending_within_slice_date
     @schedule = Schedule.new every_month until: dec_31_2000
     _, leftover = @schedule.slice(jan_1_2000..dec_31_2000)

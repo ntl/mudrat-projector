@@ -1,7 +1,7 @@
 require 'test_helper'
 
 # http://taxes.about.com/od/paymentoptions/a/estimated_tax_3.htm
-class SelfEmployedTaxCalculationTest < Minitest::Unit::TestCase
+class SelfEmployedTaxCalculationTest < Minitest::Test
   def setup
     @projector = Projector.new from: jan_1_2013
 

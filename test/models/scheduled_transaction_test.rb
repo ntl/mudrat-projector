@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class ScheduledTransactionTest < Minitest::Unit::TestCase
+class ScheduledTransactionTest < Minitest::Test
   def setup
     @chart = ChartOfAccounts.new
     @chart.add_account :checking, type: :asset
