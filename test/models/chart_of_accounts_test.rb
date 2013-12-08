@@ -13,7 +13,7 @@ class ChartOfAccountsTest < Minitest::Test
   def test_adding_account_can_default_open_date
     @chart.add_account :checking, type: :asset
     assert_equal 1, @chart.size
-    assert_equal Projector::ABSOLUTE_START, @chart.fetch(:checking).open_date
+    assert_equal ABSOLUTE_START, @chart.fetch(:checking).open_date
   end
 
   def test_can_set_opening_balance

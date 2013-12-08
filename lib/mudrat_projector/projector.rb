@@ -3,9 +3,6 @@ module MudratProjector
     extend Forwardable
     extend BankerRounding
 
-    ABSOLUTE_START = Date.new 1970, 1, 1
-    ABSOLUTE_END   = Date.new 9999, 1, 1
-
     AccountDoesNotExist = Class.new StandardError
     AccountExists       = Class.new ArgumentError
     BalanceError        = Class.new StandardError

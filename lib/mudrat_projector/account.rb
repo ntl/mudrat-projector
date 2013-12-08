@@ -6,7 +6,7 @@ module MudratProjector
 
     def initialize params = {}
       @entries         = []
-      @open_date       = params[:open_date] || Projector::ABSOLUTE_START
+      @open_date       = params[:open_date] || ABSOLUTE_START
       @offset          = 0
       @opening_balance = params[:opening_balance] || 0
       @parent_id       = params[:parent_id] || nil
@@ -66,7 +66,7 @@ module MudratProjector
 
     def default_value? attr, value
       if attr == :open_date
-        value == Projector::ABSOLUTE_START
+        value == ABSOLUTE_START
       else
         false
       end
