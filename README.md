@@ -1,3 +1,5 @@
+[![Build Status](https://api.travis-ci.org/ntl/mudrat-projector.png)](https://travis-ci.org/ntl/mudrat-projector)
+
 # MudratProjector
 
 Simple financial projection built in ruby.
