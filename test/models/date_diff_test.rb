@@ -105,6 +105,10 @@ class DateDiffTest < Minitest::Test
     assert_equal Date.new(2002, 1, 1), advance(from: jan_1_2000, unit: :year, intervals: 2)
   end
 
+  def test_advancing_one_year_after_feb_29_on_a_leap_year
+    assert_equal Date.new(2001, 2, 28), advance(from: feb_29_2000, unit: :year, intervals: 1)
+  end
+
   private
 
   def date_diff *args

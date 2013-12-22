@@ -113,7 +113,8 @@ module MudratProjector
       end
 
       def self.advance intervals, from: from
-        Date.new(from.year + intervals, from.month, from.day)
+        method = intervals > 0 ? :next_year : :prev_year
+        intervals.times.inject from do |date, _| date.public_send method; end
       end
     end
 
