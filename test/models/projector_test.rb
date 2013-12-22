@@ -147,6 +147,32 @@ class ProjectorTransactionTest < Minitest::Test
     assert_equal 0, @projector.net_worth
   end
 
+  def test_annual_transactions_by_12_months
+    @projector.add_transaction(
+      date: apr_1_2012,
+      credit: { amount: 50000, account_id: :nustartup_inc },
+      debit:  { amount: 50000, account_id: :checking      },
+      schedule: { scalar: 12, unit: :month },
+    )
+
+    @projector.project to: mar_31_2042
+
+    assert_equal 1500000, @projector.net_worth
+  end
+
+  def test_annual_transactions
+    @projector.add_transaction(
+      date: apr_1_2012,
+      credit: { amount: 50000, account_id: :nustartup_inc },
+      debit:  { amount: 50000, account_id: :checking      },
+      schedule: { scalar: 12, unit: :month },
+    )
+
+    @projector.project to: mar_31_2042
+
+    assert_equal 1500000, @projector.net_worth
+  end
+
   private
 
   def add_scheduled_transaction date = jan_1_2000

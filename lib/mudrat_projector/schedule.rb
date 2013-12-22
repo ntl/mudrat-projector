@@ -12,7 +12,9 @@ module MudratProjector
       split_count_over(range).reduce range.begin do |date, factor|
         @count -= factor if @count
         yield [date, factor]
-        DateDiff.advance intervals: factor, unit: unit, from: date
+        scalar.times.reduce date do |date, _|
+          DateDiff.advance intervals: factor, unit: unit, from: date
+        end
       end
     end
 
@@ -22,7 +24,8 @@ module MudratProjector
 
     def split_count_over range
       diff = DateDiff.date_diff unit: unit, from: range.begin, to: range.end
-      full_units, final_prorate = [@count, diff].compact.min.divmod 1
+      full_units, final_prorate = [@count, diff].compact.min.divmod scalar
+      final_prorate /= scalar
       ([1] * full_units).tap do |list|
         list.push final_prorate unless final_prorate.zero?
       end

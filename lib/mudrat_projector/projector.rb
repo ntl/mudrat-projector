@@ -18,7 +18,7 @@ module MudratProjector
       @validator    = Validator.new projector: self, chart: @chart
     end
 
-    def_delegators :@chart, *%i(accounts account_balance apply_transaction balance fetch net_worth split_account)
+    def_delegators :@chart, *%i(accounts account_balance apply_transaction balance fetch split_account)
     def_delegators :@validator, *%i(must_be_balanced! validate_account! validate_transaction!)
 
     def accounts= accounts
@@ -49,6 +49,10 @@ module MudratProjector
 
     def balanced?
       balance.zero?
+    end
+
+    def net_worth
+      @chart.net_worth.round(2).to_f
     end
 
     def project to: end_of_projection, build_next: false, &block

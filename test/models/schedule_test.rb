@@ -43,6 +43,28 @@ class ScheduledTransactionTest < Minitest::Test
     assert_equal expected_prorates, actual_prorates
   end
 
+  def test_slice_handles_scalar_greater_than_1
+    @schedule = Schedule.new scalar: 2, unit: :month
+
+    expected_dates = [jan_1_2000, mar_1_2000]
+    actual_dates, _ = @schedule.slice(jan_1_2000..mar_31_2000)
+    actual_dates.map! &:first
+
+    assert_equal expected_dates, actual_dates
+
+    expected_prorates = [1.0, 0.5]
+    actual_prorates, _ = @schedule.slice(jan_1_2000..mar_31_2000)
+    actual_prorates.map! &:last
+
+    assert_equal expected_prorates, actual_prorates
+
+    expected_prorates = [1.0, 0.75]
+    actual_prorates, _ = @schedule.slice(jan_1_2000..apr_15_2000)
+    actual_prorates.map! &:last
+
+    assert_equal expected_prorates, actual_prorates
+  end
+
   def test_handles_start_after_projection
     @schedule = Schedule.new every_month(from: apr_1_2000, until: jun_15_2000)
 
