@@ -28,9 +28,17 @@ module MudratProjector
       end
 
       def days_between
-        (to - from).to_f + 1
+        to_big_decimal(to - from) + 1
       end
       private :days_between
+
+      def to_big_decimal(number)
+        if number.is_a? Rational
+          number.to_d(20)
+        else
+          number.to_d
+        end
+      end
     end
 
     class DayCalculator < Calculator
@@ -88,7 +96,7 @@ module MudratProjector
       end
 
       def days_in_unit unit
-        ((unit.end + 1) - unit.begin).to_f
+        to_big_decimal((unit.end + 1) - unit.begin)
       end
 
       def units_between

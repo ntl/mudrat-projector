@@ -99,7 +99,7 @@ module MudratProjector
     private
 
     def fmt number
-      number.respond_to?(:round) ? number.round(2).to_f : number
+      number.respond_to?(:round) ? number.round(2).to_d : number
     end
   end
 

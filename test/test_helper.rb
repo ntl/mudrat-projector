@@ -31,7 +31,7 @@ end
 # BigDecimal needs friendlier output
 class BigDecimal < Numeric
   def inspect
-    "#<BigDecmial:#{round(10).to_f.inspect}>"
+    "#<BigDecmial:#{round(20).to_f.inspect}>"
   end
 end
 
