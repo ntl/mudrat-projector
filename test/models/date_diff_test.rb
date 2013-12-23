@@ -66,10 +66,9 @@ class DateDiffTest < Minitest::Test
   end
 
   def test_full_years
-    dec_12_2004 = Date.new 2004, 12, 31
-    assert_equal 5.0, date_diff(:year, jan_1_2000, dec_12_2004)
-    assert_equal 20.0, date_diff(:quarter, jan_1_2000, dec_12_2004)
-    assert_equal 60.0, date_diff(:month, jan_1_2000, dec_12_2004)
+    assert_equal 5.0, date_diff(:year, jan_1_2000, dec_31_2004)
+    assert_equal 20.0, date_diff(:quarter, jan_1_2000, dec_31_2004)
+    assert_equal 60.0, date_diff(:month, jan_1_2000, dec_31_2004)
   end
 
   def test_a_year_and_four_days_across_a_leap_year
