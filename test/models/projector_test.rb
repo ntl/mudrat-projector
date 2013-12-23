@@ -72,15 +72,6 @@ class ProjectorAccountsTest < Minitest::Test
     )
     refute_equal 0, @projector.balance
 
-    assert_raises Projector::InvalidAccount do
-      @projector.add_account(
-        :savings,
-        open_date:       jan_2_2000,
-        opening_balance: 500,
-        type:            :asset,
-      )
-    end
-
     @projector.add_account(
       :estate,
       open_date:       jan_1_2000,

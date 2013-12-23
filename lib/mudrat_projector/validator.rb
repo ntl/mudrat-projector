@@ -22,12 +22,6 @@ module MudratProjector
         raise Projector::InvalidAccount, "Account #{account_id.inspect} has "\
           "invalid type #{params[:type].inspect}"
       end
-      if params.has_key?(:open_date) && params[:open_date] > projector.from
-        if params.has_key? :opening_balance
-          raise Projector::InvalidAccount, "Account #{account_id.inspect} opens "\
-            "after projector, but has an opening balance"
-        end
-      end
     end
 
     def validate_transaction! transaction
