@@ -37,6 +37,13 @@ class TransactionHandlerTest < Minitest::Test
     assert_equal 1, next_projector.transactions.size
   end
 
+  def test_routes_future_transaction_into_next_projector
+    @transaction_handler.next_projector = next_projector
+    @transaction_handler << scheduled_transaction(start_date: jan_1_2040, end_date: jan_1_2041)
+    assert_equal 0, @projection.transaction_sequence.size
+    assert_equal 1, next_projector.transactions.size
+  end
+
   private
 
   def fixed_transaction date: jan_1_2000, amount: 1000

@@ -7,6 +7,7 @@ module MudratProjector
     end
 
     def << transaction
+      return defer(transaction) if transaction.date > @projection.range.end
       in_projection, leftover = transaction.slice @projection.range.end
       @projection.add_transaction_batch in_projection
       defer leftover if leftover
