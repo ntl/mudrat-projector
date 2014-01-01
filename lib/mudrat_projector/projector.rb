@@ -15,6 +15,7 @@ module MudratProjector
       @chart        = params.fetch :chart, ChartOfAccounts.new
       @from         = params.fetch :from, ABSOLUTE_START
       @transactions = []
+      @transaction_with_ids = {}
       @validator    = Validator.new projector: self, chart: @chart
     end
 
@@ -39,12 +40,38 @@ module MudratProjector
     def add_transaction params
       if params.is_a? Transaction
         transaction = params
+      elsif id = params.delete(:id)
+        return add_transaction_with_id(id, params)
       else
-        klass = params.has_key?(:schedule) ? ScheduledTransaction : Transaction
-        transaction = klass.new params
-        validate_transaction! transaction
+        transaction = build_transaction params
       end
       @transactions.push transaction
+    end
+
+    def add_transaction_with_id(id, params)
+      @transaction_with_ids[id] = build_transaction params
+    end
+
+    def alter_transaction(id, params)
+      orig = remove_transaction id
+      effective_date = params.delete :effective_date
+      old, _ = orig.slice(effective_date - 1)
+      old.each do |t| add_transaction t; end
+      params[:date] = effective_date
+      add_transaction_with_id id, params
+    end
+
+    def fetch_transaction(id)
+      @transaction_with_ids.fetch id
+    end
+
+    def remove_transaction(id)
+      @transaction_with_ids.delete id
+    end
+
+    def each_transaction(&block)
+      @transactions.each &block
+      @transaction_with_ids.values.each(&block)
     end
 
     def balanced?
@@ -62,13 +89,22 @@ module MudratProjector
       if build_next
         handler.next_projector = self.class.new from: to + 1, chart: @chart
       end
-      @transactions.each do |transaction| handler << transaction; end
+      each_transaction do |transaction| handler << transaction; end
       projection.project! &block
       handler.next_projector
     end
 
     def transactions= transactions
       transactions.each do |transaction| add_transaction transaction; end
+    end
+
+    private
+
+    def build_transaction params
+      klass = params.has_key?(:schedule) ? ScheduledTransaction : Transaction
+      klass.new(params).tap do |transaction|
+        validate_transaction! transaction
+      end
     end
 
   end

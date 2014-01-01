@@ -151,6 +151,44 @@ class ProjectorTransactionTest < Minitest::Test
     assert_equal 1500000, @projector.net_worth
   end
 
+  def test_add_and_remove_transaction_with_id
+    @projector.add_transaction(
+      id: :foo,
+      date: jan_2_2000,
+      credit: { amount: 1000, account_id: :nustartup_inc },
+      debit:  { amount: 1000, account_id: :checking      },
+    )
+
+    refute_nil @projector.fetch_transaction(:foo)
+
+    @projector.remove_transaction(:foo)
+
+    assert_raises KeyError do
+      @projector.fetch_transaction(:foo)
+    end
+  end
+
+  def test_altering_scheduled_transaction
+    @projector.add_transaction(
+      id: :bar,
+      date: jan_1_2000,
+      credit: { amount: 1000, account_id: :nustartup_inc },
+      debit:  { amount: 1000, account_id: :checking      },
+      schedule: every_month,
+    )
+
+    @projector.alter_transaction(
+      :bar,
+      effective_date: jul_1_2000,
+      credit:   { amount: 2000, account_id: :nustartup_inc },
+      debit:    { amount: 2000, account_id: :checking      },
+      schedule: every_month,
+    )
+
+    @projector.project to: dec_31_2000
+    assert_equal (6000 + 12000), @projector.net_worth
+  end
+
   private
 
   def add_scheduled_transaction date = jan_1_2000
