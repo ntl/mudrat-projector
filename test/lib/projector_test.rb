@@ -168,6 +168,21 @@ class ProjectorTransactionTest < Minitest::Test
     end
   end
 
+  def test_ending_scheduled_transaction
+    @projector.add_transaction(
+      id: :bar,
+      date: jan_1_2000,
+      credit: { amount: 1000, account_id: :nustartup_inc },
+      debit:  { amount: 1000, account_id: :checking      },
+      schedule: every_month,
+    )
+
+    @projector.end_scheduled_transaction :bar, effective_date: jun_30_2000
+    @projector.project to: dec_31_2000
+
+    assert_equal 6000, @projector.net_worth
+  end
+
   def test_altering_scheduled_transaction
     @projector.add_transaction(
       id: :bar,

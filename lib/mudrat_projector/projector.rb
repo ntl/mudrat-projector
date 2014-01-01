@@ -56,8 +56,10 @@ module MudratProjector
       orig = remove_transaction id
       old, new = orig.slice(effective_date - 1)
       old.each do |t| add_transaction t; end
-      new_transaction = new.clone_transaction multiplier: scale
-      add_transaction_with_id id, new_transaction
+      unless scale == 0
+        new_transaction = new.clone_transaction multiplier: scale
+        add_transaction_with_id id, new_transaction
+      end
     end
 
     def fetch_transaction(id)
@@ -65,7 +67,12 @@ module MudratProjector
     end
 
     def remove_transaction(id)
+      @transaction_with_ids.fetch id # generate KeyError
       @transaction_with_ids.delete id
+    end
+
+    def end_scheduled_transaction(id, effective_date: nil)
+      alter_transaction id, effective_date: (effective_date + 1), scale: 0
     end
 
     def each_transaction(&block)
