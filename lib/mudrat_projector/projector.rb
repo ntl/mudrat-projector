@@ -52,13 +52,12 @@ module MudratProjector
       @transaction_with_ids[id] = build_transaction params
     end
 
-    def alter_transaction(id, params)
+    def alter_transaction(id, effective_date: nil, scale: nil)
       orig = remove_transaction id
-      effective_date = params.delete :effective_date
-      old, _ = orig.slice(effective_date - 1)
+      old, new = orig.slice(effective_date - 1)
       old.each do |t| add_transaction t; end
-      params[:date] = effective_date
-      add_transaction_with_id id, params
+      new_transaction = new.clone_transaction multiplier: scale
+      add_transaction_with_id id, new_transaction
     end
 
     def fetch_transaction(id)
@@ -101,6 +100,7 @@ module MudratProjector
     private
 
     def build_transaction params
+      return params if params.is_a? Transaction
       klass = params.has_key?(:schedule) ? ScheduledTransaction : Transaction
       klass.new(params).tap do |transaction|
         validate_transaction! transaction

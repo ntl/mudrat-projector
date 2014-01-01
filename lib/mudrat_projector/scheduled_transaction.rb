@@ -9,11 +9,11 @@ module MudratProjector
 
     def build_transactions intervals
       intervals.map do |date, prorate|
-        clone_transaction new_date: date, multiplier: prorate
+        clone_transaction new_date: date, multiplier: prorate, new_schedule: nil
       end
     end
 
-    def clone_transaction new_date: date, new_schedule: nil, multiplier: 1
+    def clone_transaction new_date: date, new_schedule: schedule.serialize, multiplier: 1
       params = build_cloned_tranasction_params new_date, multiplier
       return Transaction.new(params) if new_schedule.nil?
       params[:schedule] = new_schedule

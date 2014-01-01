@@ -180,9 +180,7 @@ class ProjectorTransactionTest < Minitest::Test
     @projector.alter_transaction(
       :bar,
       effective_date: jul_1_2000,
-      credit:   { amount: 2000, account_id: :nustartup_inc },
-      debit:    { amount: 2000, account_id: :checking      },
-      schedule: every_month,
+      scale: 2.0,
     )
 
     @projector.project to: dec_31_2000
